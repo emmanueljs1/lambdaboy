@@ -1,6 +1,6 @@
 module Main where
 
-import Lib
+import Gameboy
 
 main :: IO ()
 main = someFunc

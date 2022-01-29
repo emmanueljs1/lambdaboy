@@ -1,4 +1,4 @@
-{-# LANGUAGE GADTs, DataKinds, TypeFamilies, RankNTypes #-}
+{-# LANGUAGE GADTs, DataKinds, TypeFamilies, StandaloneDeriving #-}
 module Gameboy
     ( someFunc
     ) where
@@ -14,11 +14,13 @@ data RegType
   | H
   | L
 
-type family CanCombine (r1 :: RegType) (r2 :: RegType) :: Bool where
-  CanCombine 'B 'C = 'True
-  CanCombine 'D 'E = 'True
-  CanCombine 'H 'L = 'True
-  CanCombine _ _ = 'False
+data RegCompatibility = Compatible | NotCompatible
+
+type family CombinedRegs (r1 :: RegType) (r2 :: RegType) :: RegCompatibility where
+  CombinedRegs 'B 'C = 'Compatible
+  CombinedRegs 'D 'E = 'Compatible
+  CombinedRegs 'H 'L = 'Compatible
+  CombinedRegs _ _ = 'NotCompatible
 
 data Reg :: RegType -> * where
   RegA :: Reg 'A
@@ -29,6 +31,8 @@ data Reg :: RegType -> * where
   RegH :: Reg 'H
   RegL :: Reg 'L
 
+deriving instance Show (Reg rt)
+
 data OperandKind
   = KImm8
   | KReg8
@@ -36,19 +40,34 @@ data OperandKind
   | KReg16
   | KIndirect
 
-data Operand :: OperandKind -> * -> * where
-  Imm8 :: Word8 -> Operand 'KImm8 Word8
-  Reg8 :: Reg r -> Operand 'KReg8 Word8
-  Imm16 :: Word16 -> Operand 'KImm16 Word16
-  Reg16 :: CanCombine r1 r2 ~ 'True => Reg r1 -> Reg r2 -> Operand 'KReg16 Word16
-  Indirect :: Operand k Word16 -> Operand 'KIndirect Word8
+data Operand :: OperandKind -> * where
+  Imm8 :: Word8 -> Operand 'KImm8
+  Reg8 :: Reg r -> Operand 'KReg8
+  Imm16 :: Word16 -> Operand 'KImm16
+  Reg16 :: CombinedRegs r1 r2 ~ 'Compatible => Reg r1 -> Reg r2 -> Operand 'KReg16
+  Indirect :: Operand ok -> Operand 'KIndirect
 
-type family Loadable8 (k1 :: OperandKind) (o2 :: OperandKind) :: Bool where
-  Loadable8 'KReg8 'KReg8 = 'True
-  Loadable8 _ _ = 'False
+deriving instance Show (Operand ok)
 
-data Instruction where
-  Load8 :: Loadable8 k1 k2 ~ 'True => Operand k1 Word8 -> Operand k2 Word8 -> Instruction
+data Loadable = Loadable | NotLoadable
+
+type family LoadOperands (k1 :: OperandKind) (k2 :: OperandKind) :: Loadable where
+  -- TODO: add all valid load operand combinations
+  LoadOperands 'KReg8 'KReg8 = 'Loadable
+  LoadOperands _ _ = 'NotLoadable
+
+data InstructionKind
+  = KLoad
+
+data Instruction :: InstructionKind -> * where
+  Load :: LoadOperands k1 k2 ~ 'Loadable => Operand k1 -> Operand k2 -> Instruction 'KLoad
+
+executeInstruction :: Instruction k -> IO ()
+executeInstruction ins@(Load _ _) = load ins where
+  load :: Instruction 'KLoad -> IO ()
+  load _ = undefined -- TODO: implement
 
 someFunc :: IO ()
-someFunc = putStrLn "someFunc"
+someFunc = do
+  let instruction = Load (Reg8 RegA) (Reg8 RegB)
+  executeInstruction instruction

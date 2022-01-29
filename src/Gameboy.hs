@@ -1,4 +1,4 @@
-{-# LANGUAGE GADTs, DataKinds, TypeFamilies #-}
+{-# LANGUAGE GADTs, DataKinds, TypeFamilies, RankNTypes #-}
 module Gameboy
     ( someFunc
     ) where
@@ -29,15 +29,26 @@ data Reg :: RegType -> * where
   RegH :: Reg 'H
   RegL :: Reg 'L
 
-data Operand :: * -> * where
-  Imm8 :: Word8 -> Operand Word8
-  Reg8 :: Reg r -> Operand Word8
-  Imm16 :: Word16 -> Operand Word16
-  Reg16 :: CanCombine r1 r2 ~ 'True => Reg r1 -> Reg r2 -> Operand Word16
-  Indirect :: Operand Word16 -> Operand Word8
+data OperandKind
+  = KImm8
+  | KReg8
+  | KImm16
+  | KReg16
+  | KIndirect
+
+data Operand :: OperandKind -> * -> * where
+  Imm8 :: Word8 -> Operand 'KImm8 Word8
+  Reg8 :: Reg r -> Operand 'KReg8 Word8
+  Imm16 :: Word16 -> Operand 'KImm16 Word16
+  Reg16 :: CanCombine r1 r2 ~ 'True => Reg r1 -> Reg r2 -> Operand 'KReg16 Word16
+  Indirect :: Operand k Word16 -> Operand 'KIndirect Word8
+
+type family Loadable8 (k1 :: OperandKind) (o2 :: OperandKind) :: Bool where
+  Loadable8 'KReg8 'KReg8 = 'True
+  Loadable8 _ _ = 'False
 
 data Instruction where
-  Load8 :: Operand Word8 -> Operand Word8 -> Instruction -- TODO: constrain to valid operands only?
+  Load8 :: Loadable8 k1 k2 ~ 'True => Operand k1 Word8 -> Operand k2 Word8 -> Instruction
 
 someFunc :: IO ()
 someFunc = putStrLn "someFunc"

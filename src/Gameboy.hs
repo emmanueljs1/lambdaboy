@@ -14,13 +14,13 @@ data RegType
   | H
   | L
 
-data RegCompatibility = Compatible | NotCompatible
+data CombinedRegValidity = CombinedRegsValid | CombinedRegsInvalid
 
-type family CombinedRegs (r1 :: RegType) (r2 :: RegType) :: RegCompatibility where
-  CombinedRegs 'B 'C = 'Compatible
-  CombinedRegs 'D 'E = 'Compatible
-  CombinedRegs 'H 'L = 'Compatible
-  CombinedRegs _ _ = 'NotCompatible
+type family CombinedRegs (r1 :: RegType) (r2 :: RegType) :: CombinedRegValidity where
+  CombinedRegs 'B 'C = 'CombinedRegsValid
+  CombinedRegs 'D 'E = 'CombinedRegsValid
+  CombinedRegs 'H 'L = 'CombinedRegsValid
+  CombinedRegs _ _ = 'CombinedRegsInvalid
 
 data Reg :: RegType -> * where
   RegA :: Reg 'A
@@ -40,12 +40,19 @@ data OperandKind
   | KReg16
   | KIndirect
 
+data Addressable = Addresable | NotAddressable
+
+type family Address (ok :: OperandKind) :: Addressable where
+  Address 'KImm16 = 'Addresable
+  Address 'KReg16 = 'Addresable
+  Address _ = 'NotAddressable
+
 data Operand :: OperandKind -> * where
   Imm8 :: Word8 -> Operand 'KImm8
   Reg8 :: Reg r -> Operand 'KReg8
   Imm16 :: Word16 -> Operand 'KImm16
-  Reg16 :: CombinedRegs r1 r2 ~ 'Compatible => Reg r1 -> Reg r2 -> Operand 'KReg16
-  Indirect :: Operand ok -> Operand 'KIndirect
+  Reg16 :: CombinedRegs r1 r2 ~ 'CombinedRegsValid => Reg r1 -> Reg r2 -> Operand 'KReg16
+  Indirect :: Address ok ~ 'Addresable => Operand ok -> Operand 'KIndirect
 
 deriving instance Show (Operand ok)
 

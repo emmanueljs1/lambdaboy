@@ -34,13 +34,9 @@ data Reg :: RegType -> * where
 
 deriving instance Show (Reg rt)
 
-data OffsetType
-  = RegCOffset
-  | Imm8Offset
+data OffsetType = RegCOffset | Imm8Offset
 
-data PostOperationType
-  = Increment
-  | Decrement
+data PostOperationType = Increment | Decrement
 
 data StackPointerOperation = None | AddInt8
 
@@ -148,16 +144,44 @@ type family LoadOperands (k1 :: OperandKind) (k2 :: OperandKind) :: Loadable whe
   LoadOperands ('KStackPointer 'None) ('KReg16 'H 'L) = 'Loadable
   LoadOperands _ _ = 'NotLoadable
 
+data Carry = CarryFlag | NoCarry
+
+data Addable = Addable | NotAddable
+
+type family AddOperands (k1 :: OperandKind) (k2 :: OperandKind) :: Addable where
+  AddOperands ('KReg8 'A) ('KReg8 _) = 'Addable
+  AddOperands ('KReg8 'A) ('KIndirect ('KReg16 'H 'L)) = 'Addable
+  AddOperands ('KReg8 'A) 'KImm8 = 'Addable
+  AddOperands _ _ = 'NotAddable
+
+data Andable = Andable | NotAndable
+
+type family AndOperands (k1 :: OperandKind) (k2 :: OperandKind) :: Andable where
+  AndOperands ('KReg8 'A) ('KReg8 _) = 'Andable
+  AndOperands ('KReg8 'A) ('KIndirect ('KReg16 'H 'L)) = 'Andable
+  AndOperands ('KReg8 'A) 'KImm8 = 'Andable
+  AndOperands _ _ = 'NotAndable
+
 data InstructionKind
   = KLoad
+  | KAdd
+  | KAnd
 
 data Instruction :: InstructionKind -> * where
   Load :: LoadOperands k1 k2 ~ 'Loadable => Operand k1 -> Operand k2 -> Instruction 'KLoad
+  Add :: AddOperands k1 k2 ~ 'Addable => Carry -> Operand k1 -> Operand k2 -> Instruction 'KAdd
+  And :: AndOperands k1 k2 ~ 'Andable => Operand k1 -> Operand k2 -> Instruction 'KAnd
 
 executeInstruction :: Instruction k -> IO ()
-executeInstruction ins@(Load _ _) = load ins where
-  load :: Instruction 'KLoad -> IO ()
-  load _ = undefined -- TODO: implement
+executeInstruction ins@(Load _ _) = loadIns ins where
+  loadIns :: Instruction 'KLoad -> IO ()
+  loadIns _ = undefined -- TODO: implement
+executeInstruction ins@(Add _ _ _) = addIns ins where
+  addIns :: Instruction 'KAdd -> IO ()
+  addIns _ = undefined -- TODO: implement
+executeInstruction ins@(And _ _) = andIns ins where
+  andIns :: Instruction 'KAnd -> IO ()
+  andIns _ = undefined -- TODO: implement
 
 someFunc :: IO ()
 someFunc = do

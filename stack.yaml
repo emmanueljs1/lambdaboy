@@ -50,7 +50,12 @@ packages:
 
 # Control whether we use the GHC we find on the path
 # system-ghc: true
-#
+
+ghc-options:
+    # All packages
+    "$locals": -Wall
+    "$targets": -Wall
+
 # Require a specific version of stack, using version ranges
 # require-stack-version: -any # Default
 # require-stack-version: ">=2.7"

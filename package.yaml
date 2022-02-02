@@ -21,7 +21,6 @@ description:         Please see the README on GitHub at <https://github.com/emma
 
 dependencies:
 - base >= 4.7 && < 5
-- ghc-prim
 
 library:
   source-dirs: src

@@ -16,13 +16,15 @@ data RegType
   | H
   | L
 
-data CombinedRegValidity = CombinedRegsValid | CombinedRegsInvalid
+data ValidCombinedRegs = ValidCombinedRegs
 
-type family CombinedRegs (r1 :: RegType) (r2 :: RegType) :: CombinedRegValidity where
-  CombinedRegs 'B 'C = 'CombinedRegsValid
-  CombinedRegs 'D 'E = 'CombinedRegsValid
-  CombinedRegs 'H 'L = 'CombinedRegsValid
-  CombinedRegs _ _ = 'CombinedRegsInvalid
+type family CombinedRegs (r1 :: RegType) (r2 :: RegType) :: ValidCombinedRegs where
+  CombinedRegs 'B 'C = 'ValidCombinedRegs
+  CombinedRegs 'D 'E = 'ValidCombinedRegs
+  CombinedRegs 'H 'L = 'ValidCombinedRegs
+  CombinedRegs r1 r2 = TypeError ('Text "Combined regs " ':<>: 'ShowType r1 ':<>:
+                                  'Text " and " ':<>: 'ShowType r2 ':<>:
+                                  'Text " are not valid")
 
 data Reg :: RegType -> * where
   RegA :: Reg 'A
@@ -55,19 +57,19 @@ data OperandKind
 
 type IndirectHLKind = 'KIndirect ('KReg16 'H 'L)
 
-data Addressable = Addresable | NotAddressable
+data Addressable = Addresable
 
 type family Address (ok :: OperandKind) :: Addressable where
   Address 'KUimm16 = 'Addresable
   Address ('KReg16 _ _) = 'Addresable
-  Address _ = 'NotAddressable
+  Address ok = TypeError ('Text "Operand does not represent valid address: " ':<>: 'ShowType ok)
 
-data Offsetable = Offsetable OffsetType | NotOffsetable
+data Offsetable = Offsetable OffsetType
 
 type family Offset (ok :: OperandKind) :: Offsetable where
   Offset 'KUimm8 = 'Offsetable 'Uimm8Offset
   Offset ('KReg8 'C) = 'Offsetable 'RegCOffset
-  Offset _ = 'NotOffsetable
+  Offset ok = TypeError ('Text "Operand does not represent valid offset: " ':<>: 'ShowType ok)
 
 data StackPointerOperation :: StackPointerOperationKind -> * where
   Unchanged :: StackPointerOperation 'KUnchanged
@@ -81,12 +83,12 @@ data PostInstructionOperation :: PostInstructionOperationKind -> * where
 
 deriving instance Show (PostInstructionOperation piok)
 
-data PostOperable = PostOperable | NotPostOperable
+data PostOperable = PostOperable
 
 type family PostOperation (ok :: OperandKind) (piok :: PostInstructionOperationKind) :: PostOperable where
   PostOperation ('KReg16 'H 'L) 'KIncrementAfter = 'PostOperable
   PostOperation ('KReg16 'H 'L) 'KDecrementAfter = 'PostOperable
-  PostOperation _ _ = 'NotPostOperable
+  PostOperation ok piok = TypeError ('ShowType piok ':<>: 'Text " is not a valid post instruction operation for " ':<>: 'ShowType ok)
 
 data BitToTest (n :: Nat) = BitToTest deriving Show
 
@@ -97,7 +99,7 @@ data Operand :: OperandKind -> * where
   Imm8 :: Int8 -> Operand 'KImm8
   Reg8 :: Reg r -> Operand ('KReg8 r)
   Uimm16 :: Word16 -> Operand 'KUimm16
-  Reg16 :: CombinedRegs r1 r2 ~ 'CombinedRegsValid => Reg r1 -> Reg r2 -> Operand ('KReg16 r1 r2)
+  Reg16 :: CombinedRegs r1 r2 ~ 'ValidCombinedRegs => Reg r1 -> Reg r2 -> Operand ('KReg16 r1 r2)
   Indirect :: Address ok ~ 'Addresable => Operand ok -> Operand ('KIndirect ok)
   IndirectHL :: Operand IndirectHLKind
   FF00Offset :: Offset ok ~ 'Offsetable ot => Operand ok -> Operand ('KFF00Offset ot)

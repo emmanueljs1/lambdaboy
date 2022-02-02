@@ -53,7 +53,7 @@ data OperandKind
   | KFF00Offset OffsetType
   | KStackPointer StackPointerOperationKind
   | KPostInstruction OperandKind PostInstructionOperationKind
-  | KTestBit
+  | KUimm3
 
 data Addressable = Addresable | NotAddressable
 
@@ -88,9 +88,9 @@ type family PostOperation (ok :: OperandKind) (piok :: PostInstructionOperationK
   PostOperation ('KReg16 'H 'L) 'KDecrementAfter = 'PostOperable
   PostOperation _ _ = 'NotPostOperable
 
-data BitToTest (n :: Nat) = BitToTest
+data Uimm3Nat (n :: Nat) = Uimm3Nat
 
-instance KnownNat n => Show (BitToTest n) where
+instance KnownNat n => Show (Uimm3Nat n) where
   show b = "BitToTest " ++ show (natVal b)
 
 type Only3Bits (n :: Nat) = (KnownNat n, 0 <= n, n <= 7)
@@ -105,7 +105,7 @@ data Operand :: OperandKind -> * where
   FF00Offset :: Offset ok ~ 'Offsetable ot => Operand ok -> Operand ('KFF00Offset ot)
   StackPointer :: StackPointerOperation k -> Operand ('KStackPointer k)
   PostInstruction :: PostOperation ok piok ~ 'PostOperable => Operand ok -> PostInstructionOperation piok -> Operand ('KPostInstruction ok piok)
-  TestBit :: Only3Bits n => BitToTest n -> Operand 'KTestBit
+  Uimm3 :: Only3Bits n => Uimm3Nat n -> Operand 'KUimm3
 
 deriving instance Show (Operand ok)
 
@@ -120,6 +120,8 @@ data InstructionKind
   | KSub
   | KXor
   | KBit
+  | KRes
+  | KSet
   | KInvalid
 
 type family LoadOperands (k1 :: OperandKind) (k2 :: OperandKind) :: InstructionKind where
@@ -220,9 +222,19 @@ type family XorOperands (k1 :: OperandKind) (k2 :: OperandKind) :: InstructionKi
   XorOperands _ _ = 'KInvalid
 
 type family BitOperands (k1 :: OperandKind) (k2 :: OperandKind) :: InstructionKind where
-  BitOperands 'KTestBit ('KReg8 _) = 'KBit
-  BitOperands 'KTestBit ('KIndirect ('KReg16 'H 'L)) = 'KBit
+  BitOperands 'KUimm3 ('KReg8 _) = 'KBit
+  BitOperands 'KUimm3 ('KIndirect ('KReg16 'H 'L)) = 'KBit
   BitOperands _ _ = 'KInvalid
+
+type family ResOperands (k1 :: OperandKind) (k2 :: OperandKind) :: InstructionKind where
+  ResOperands 'KUimm3 ('KReg8 _) = 'KRes
+  ResOperands 'KUimm3 ('KIndirect ('KReg16 'H 'L)) = 'KRes
+  ResOperands _ _ = 'KInvalid
+
+type family SetOperands (k1 :: OperandKind) (k2 :: OperandKind) :: InstructionKind where
+  SetOperands 'KUimm3 ('KReg8 _) = 'KSet
+  SetOperands 'KUimm3 ('KIndirect ('KReg16 'H 'L)) = 'KSet
+  SetOperands _ _ = 'KInvalid
 
 data Instruction :: InstructionKind -> * where
   Load :: LoadOperands k1 k2 ~ 'KLoad => Operand k1 -> Operand k2 -> Instruction 'KLoad
@@ -235,6 +247,8 @@ data Instruction :: InstructionKind -> * where
   Sub :: SubOperands k1 k2 ~ 'KSub => ArithmeticType atk -> Operand k1 -> Operand k2 -> Instruction 'KSub
   Xor :: XorOperands k1 k2 ~ 'KXor => Operand k1 -> Operand k2 -> Instruction 'KXor
   Bit :: BitOperands k1 k2 ~ 'KBit => Operand k1 -> Operand k2 -> Instruction 'KBit
+  Res :: ResOperands k1 k2 ~ 'KRes => Operand k1 -> Operand k2 -> Instruction 'KRes
+  Set :: SetOperands k1 k2 ~ 'KSet => Operand k1 -> Operand k2 -> Instruction 'KSet
 
 -- TODO: implement
 executeInstruction :: Instruction k -> IO ()
@@ -268,7 +282,13 @@ executeInstruction ins@(Xor _ _) = xorIns ins where
   xorIns _ = undefined
 executeInstruction ins@(Bit _ _) = bitIns ins where
   bitIns :: Instruction 'KBit -> IO ()
-  bitIns (Bit (TestBit BitToTest) _) = undefined
+  bitIns (Bit (Uimm3 Uimm3Nat) _) = undefined
+executeInstruction ins@(Res _ _) = resIns ins where
+  resIns :: Instruction 'KRes -> IO ()
+  resIns _ = undefined
+executeInstruction ins@(Set _ _) = setIns ins where
+  setIns :: Instruction 'KSet -> IO ()
+  setIns _ = undefined
 
 someFunc :: IO ()
 someFunc = do

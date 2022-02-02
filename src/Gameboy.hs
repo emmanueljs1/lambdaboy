@@ -1,4 +1,6 @@
-{-# LANGUAGE GADTs, DataKinds, TypeFamilies, StandaloneDeriving, ConstraintKinds, TypeOperators, UndecidableInstances, PolyKinds #-}
+{-# LANGUAGE GADTs, DataKinds, TypeFamilies, StandaloneDeriving, ConstraintKinds, TypeOperators #-}
+
+
 module Gameboy
     ( someFunc
     ) where
@@ -16,15 +18,13 @@ data RegType
   | H
   | L
 
-data ValidCombinedRegs = ValidCombinedRegs
+data RegsCompatible = RegsCompatible | RegsNotCompatible
 
-type family CombinedRegs (r1 :: RegType) (r2 :: RegType) :: ValidCombinedRegs where
-  CombinedRegs 'B 'C = 'ValidCombinedRegs
-  CombinedRegs 'D 'E = 'ValidCombinedRegs
-  CombinedRegs 'H 'L = 'ValidCombinedRegs
-  CombinedRegs r1 r2 = TypeError ('Text "Combined regs " ':<>: 'ShowType r1 ':<>:
-                                  'Text " and " ':<>: 'ShowType r2 ':<>:
-                                  'Text " are not valid")
+type family CombinedRegs (r1 :: RegType) (r2 :: RegType) :: RegsCompatible where
+  CombinedRegs 'B 'C = 'RegsCompatible
+  CombinedRegs 'D 'E = 'RegsCompatible
+  CombinedRegs 'H 'L = 'RegsCompatible
+  CombinedRegs _ _ = 'RegsNotCompatible
 
 data Reg :: RegType -> * where
   RegA :: Reg 'A
@@ -53,23 +53,21 @@ data OperandKind
   | KFF00Offset OffsetType
   | KStackPointer StackPointerOperationKind
   | KPostInstruction OperandKind PostInstructionOperationKind
-  | KBitToTest
+  | KTestBit
 
-type IndirectHLKind = 'KIndirect ('KReg16 'H 'L)
-
-data Addressable = Addresable
+data Addressable = Addresable | NotAddressable
 
 type family Address (ok :: OperandKind) :: Addressable where
   Address 'KUimm16 = 'Addresable
   Address ('KReg16 _ _) = 'Addresable
-  Address ok = TypeError ('Text "Operand does not represent valid address: " ':<>: 'ShowType ok)
+  Address _ = 'NotAddressable
 
-data Offsetable = Offsetable OffsetType
+data Offsetable = Offsetable OffsetType | NotOffsetable
 
 type family Offset (ok :: OperandKind) :: Offsetable where
   Offset 'KUimm8 = 'Offsetable 'Uimm8Offset
   Offset ('KReg8 'C) = 'Offsetable 'RegCOffset
-  Offset ok = TypeError ('Text "Operand does not represent valid offset: " ':<>: 'ShowType ok)
+  Offset _ = 'NotOffsetable
 
 data StackPointerOperation :: StackPointerOperationKind -> * where
   Unchanged :: StackPointerOperation 'KUnchanged
@@ -83,29 +81,31 @@ data PostInstructionOperation :: PostInstructionOperationKind -> * where
 
 deriving instance Show (PostInstructionOperation piok)
 
-data PostOperable = PostOperable
+data PostOperable = PostOperable | NotPostOperable
 
 type family PostOperation (ok :: OperandKind) (piok :: PostInstructionOperationKind) :: PostOperable where
   PostOperation ('KReg16 'H 'L) 'KIncrementAfter = 'PostOperable
   PostOperation ('KReg16 'H 'L) 'KDecrementAfter = 'PostOperable
-  PostOperation ok piok = TypeError ('ShowType piok ':<>: 'Text " is not a valid post instruction operation for " ':<>: 'ShowType ok)
+  PostOperation _ _ = 'NotPostOperable
 
-data BitToTest (n :: Nat) = BitToTest deriving Show
+data BitToTest (n :: Nat) = BitToTest
 
-type Is3Bits (n :: Nat) = ((0 <=? n) ~ 'True, (n <=? 7) ~ 'True)
+instance KnownNat n => Show (BitToTest n) where
+  show b = "BitToTest " ++ show (natVal b)
+
+type Only3Bits (n :: Nat) = (KnownNat n, 0 <= n, n <= 7)
 
 data Operand :: OperandKind -> * where
   Uimm8 :: Word8 -> Operand 'KUimm8
   Imm8 :: Int8 -> Operand 'KImm8
   Reg8 :: Reg r -> Operand ('KReg8 r)
   Uimm16 :: Word16 -> Operand 'KUimm16
-  Reg16 :: CombinedRegs r1 r2 ~ 'ValidCombinedRegs => Reg r1 -> Reg r2 -> Operand ('KReg16 r1 r2)
+  Reg16 :: CombinedRegs r1 r2 ~ 'RegsCompatible => Reg r1 -> Reg r2 -> Operand ('KReg16 r1 r2)
   Indirect :: Address ok ~ 'Addresable => Operand ok -> Operand ('KIndirect ok)
-  IndirectHL :: Operand IndirectHLKind
   FF00Offset :: Offset ok ~ 'Offsetable ot => Operand ok -> Operand ('KFF00Offset ot)
   StackPointer :: StackPointerOperation k -> Operand ('KStackPointer k)
   PostInstruction :: PostOperation ok piok ~ 'PostOperable => Operand ok -> PostInstructionOperation piok -> Operand ('KPostInstruction ok piok)
-  TestBit :: Is3Bits n => BitToTest n -> Operand 'KBitToTest
+  TestBit :: Only3Bits n => BitToTest n -> Operand 'KTestBit
 
 deriving instance Show (Operand ok)
 
@@ -119,16 +119,8 @@ data InstructionKind
   | KOr
   | KSub
   | KXor
-
-type family OperandsTypeError (ins :: ErrorMessage) (k1 :: OperandKind) (k2 :: OperandKind) where
-  OperandsTypeError ins k1 k2 =
-    TypeError ('Text "Operands do not represent a valid " ':<>: ins ':<>: 'Text " instruction:" ':$$:
-               ins ':<>: 'Text " " ':<>: 'ShowType k1 ':<>: 'Text ", " ':<>: 'ShowType k2)
-
-type family OperandTypeError (ins :: ErrorMessage) (ok :: OperandKind) where
-  OperandTypeError ins ok =
-    TypeError ('Text "Operand does not represent a valid " ':<>: ins ':<>: 'Text " instruction:" ':$$:
-               ins ':<>: 'Text " " ':<>: 'ShowType ok)
+  | KBit
+  | KInvalid
 
 type family LoadOperands (k1 :: OperandKind) (k2 :: OperandKind) :: InstructionKind where
   -- LD r8, r8
@@ -138,11 +130,11 @@ type family LoadOperands (k1 :: OperandKind) (k2 :: OperandKind) :: InstructionK
   -- LD r16, n16
   LoadOperands ('KReg16 _ _) 'KUimm16 = 'KLoad
   -- LD (HL), r8
-  LoadOperands IndirectHLKind ('KReg8 _) = 'KLoad
+  LoadOperands ('KIndirect ('KReg16 'H 'L)) ('KReg8 _) = 'KLoad
   -- LD (HL), n8
-  LoadOperands IndirectHLKind 'KUimm8 = 'KLoad
+  LoadOperands ('KIndirect ('KReg16 'H 'L)) 'KUimm8 = 'KLoad
   -- LD r8, (HL)
-  LoadOperands ('KReg8 _) IndirectHLKind = 'KLoad
+  LoadOperands ('KReg8 _) ('KIndirect ('KReg16 'H 'L)) = 'KLoad
   -- LD (r16), A
   LoadOperands ('KIndirect ('KReg16 _ _)) ('KReg8 'A) = 'KLoad
   -- LD (n16), A
@@ -167,7 +159,7 @@ type family LoadOperands (k1 :: OperandKind) (k2 :: OperandKind) :: InstructionK
   LoadOperands ('KReg16 'H 'L) ('KStackPointer 'KAddInt8) = 'KLoad
   -- LD SP, HL
   LoadOperands ('KStackPointer 'KUnchanged) ('KReg16 'H 'L) = 'KLoad
-  LoadOperands ok1 ok2 = OperandsTypeError ('Text "LOAD") ok1 ok2
+  LoadOperands _ _ = 'KInvalid
 
 data ArithmeticTypeKind = KWithCarryIncluded | KWithoutCarryIncluded
 
@@ -177,55 +169,60 @@ data ArithmeticType :: ArithmeticTypeKind -> * where
 
 type family AddOperands (atk :: ArithmeticTypeKind) (k1 :: OperandKind) (k2 :: OperandKind) :: InstructionKind where
   AddOperands _ ('KReg8 'A) ('KReg8 _) = 'KAdd
-  AddOperands _ ('KReg8 'A) IndirectHLKind = 'KAdd
+  AddOperands _ ('KReg8 'A) ('KIndirect ('KReg16 'H 'L)) = 'KAdd
   AddOperands _ ('KReg8 'A) 'KUimm8 = 'KAdd
   AddOperands 'KWithoutCarryIncluded ('KReg16 'H 'L) ('KStackPointer 'KUnchanged) = 'KAdd
   AddOperands 'KWithoutCarryIncluded ('KStackPointer 'KUnchanged) 'KImm8 = 'KAdd
-  AddOperands atk k1 k2 = OperandsTypeError ('Text "ADD" ':<>: 'ShowType atk) k1 k2
+  AddOperands _ _ _ = 'KInvalid
 
 type family AndOperands (k1 :: OperandKind) (k2 :: OperandKind) :: InstructionKind where
   AndOperands ('KReg8 'A) ('KReg8 _) = 'KAnd
-  AndOperands ('KReg8 'A) IndirectHLKind = 'KAnd
+  AndOperands ('KReg8 'A) ('KIndirect ('KReg16 'H 'L)) = 'KAnd
   AndOperands ('KReg8 'A) 'KUimm8 = 'KAnd
-  AndOperands k1 k2 =  OperandsTypeError ('Text "AND") k1 k2
+  AndOperands _ _ = 'KInvalid
 
 type family CompareOperands (k1 :: OperandKind) (k2 :: OperandKind) :: InstructionKind where
   CompareOperands ('KReg8 'A) ('KReg8 _) = 'KCompare
-  CompareOperands ('KReg8 'A) IndirectHLKind = 'KCompare
+  CompareOperands ('KReg8 'A) ('KIndirect ('KReg16 'H 'L)) = 'KCompare
   CompareOperands ('KReg8 'A) 'KUimm8 = 'KCompare
-  CompareOperands k1 k2 = OperandsTypeError ('Text "COMPARE") k1 k2 
+  CompareOperands _ _ = 'KInvalid
 
 type family DecrementOperand (ok :: OperandKind) :: InstructionKind where
   DecrementOperand ('KReg8 _) = 'KDecrement
-  DecrementOperand IndirectHLKind = 'KDecrement
+  DecrementOperand ('KIndirect ('KReg16 'H 'L)) = 'KDecrement
   DecrementOperand ('KReg16 _ _) = 'KDecrement
   DecrementOperand ('KStackPointer 'KUnchanged) = 'KDecrement
-  DecrementOperand ok = OperandTypeError ('Text "DEC") ok
+  DecrementOperand _ = 'KInvalid
 
 type family IncrementOperand (ok :: OperandKind) :: InstructionKind where
   IncrementOperand ('KReg8 _) = 'KIncrement
-  IncrementOperand IndirectHLKind = 'KIncrement
+  IncrementOperand ('KIndirect ('KReg16 'H 'L)) = 'KIncrement
   IncrementOperand ('KReg16 _ _) = 'KIncrement
   IncrementOperand ('KStackPointer 'KUnchanged) = 'KIncrement
-  IncrementOperand ok = OperandTypeError ('Text "INC") ok
+  IncrementOperand _ = 'KInvalid
 
 type family OrOperands (k1 :: OperandKind) (k2 :: OperandKind) :: InstructionKind where
   OrOperands ('KReg8 'A) ('KReg8 _) = 'KOr
-  OrOperands ('KReg8 'A) IndirectHLKind = 'KOr
+  OrOperands ('KReg8 'A) ('KIndirect ('KReg16 'H 'L)) = 'KOr
   OrOperands ('KReg8 'A) 'KUimm8 = 'KOr
-  OrOperands k1 k2 = OperandsTypeError ('Text "OR") k1 k2
+  OrOperands _ _ = 'KInvalid
 
 type family SubOperands (k1 :: OperandKind) (k2 :: OperandKind) :: InstructionKind where
   SubOperands ('KReg8 'A) ('KReg8 _) = 'KSub
-  SubOperands ('KReg8 'A) IndirectHLKind = 'KSub
+  SubOperands ('KReg8 'A) ('KIndirect ('KReg16 'H 'L)) = 'KSub
   SubOperands ('KReg8 'A) 'KUimm8 = 'KSub
-  SubOperands k1 k2 = OperandsTypeError ('Text "SUB") k1 k2
+  SubOperands _ _ = 'KInvalid
 
 type family XorOperands (k1 :: OperandKind) (k2 :: OperandKind) :: InstructionKind where
   XorOperands ('KReg8 'A) ('KReg8 _) = 'KXor
-  XorOperands ('KReg8 'A) IndirectHLKind = 'KXor
+  XorOperands ('KReg8 'A) ('KIndirect ('KReg16 'H 'L)) = 'KXor
   XorOperands ('KReg8 'A) 'KUimm8 = 'KXor
-  XorOperands k1 k2 = OperandsTypeError ('Text "XOR") k1 k2
+  XorOperands _ _ = 'KInvalid
+
+type family BitOperands (k1 :: OperandKind) (k2 :: OperandKind) :: InstructionKind where
+  BitOperands 'KTestBit ('KReg8 _) = 'KBit
+  BitOperands 'KTestBit ('KIndirect ('KReg16 'H 'L)) = 'KBit
+  BitOperands _ _ = 'KInvalid
 
 data Instruction :: InstructionKind -> * where
   Load :: LoadOperands k1 k2 ~ 'KLoad => Operand k1 -> Operand k2 -> Instruction 'KLoad
@@ -237,6 +234,7 @@ data Instruction :: InstructionKind -> * where
   Or :: OrOperands k1 k2 ~ 'KOr => Operand k1 -> Operand k2 -> Instruction 'KOr
   Sub :: SubOperands k1 k2 ~ 'KSub => ArithmeticType atk -> Operand k1 -> Operand k2 -> Instruction 'KSub
   Xor :: XorOperands k1 k2 ~ 'KXor => Operand k1 -> Operand k2 -> Instruction 'KXor
+  Bit :: BitOperands k1 k2 ~ 'KBit => Operand k1 -> Operand k2 -> Instruction 'KBit
 
 -- TODO: implement
 executeInstruction :: Instruction k -> IO ()
@@ -267,7 +265,10 @@ executeInstruction ins@(Sub _ _ _) = subIns ins where
   subIns = undefined
 executeInstruction ins@(Xor _ _) = xorIns ins where
   xorIns :: Instruction 'KXor -> IO ()
-  xorIns = undefined
+  xorIns _ = undefined
+executeInstruction ins@(Bit _ _) = bitIns ins where
+  bitIns :: Instruction 'KBit -> IO ()
+  bitIns (Bit (TestBit BitToTest) _) = undefined
 
 someFunc :: IO ()
 someFunc = do

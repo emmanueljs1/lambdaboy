@@ -123,6 +123,7 @@ data InstructionKind
   | KRes
   | KSet
   | KSwap
+  | KRotate
   | KInvalid
 
 type family LoadOperands (k1 :: OperandKind) (k2 :: OperandKind) :: InstructionKind where
@@ -242,6 +243,15 @@ type family SwapOperand (ok :: OperandKind) :: InstructionKind where
   SwapOperand ('KIndirect ('KReg16 'H 'L)) = 'KSwap
   SwapOperand _ = 'KInvalid
 
+data RotateType = DefaultRotate | ThroughCarry
+
+data RotateDirection = RotateRight | RotateLeft
+
+type family RotateOperand (ok :: OperandKind) where
+  RotateOperand ('KReg8 _) = 'KRotate
+  RotateOperand ('KIndirect ('KReg16 'H 'L)) = 'KRotate
+  RotateOperand _ = 'KInvalid
+
 data Instruction :: InstructionKind -> * where
   Load :: LoadOperands k1 k2 ~ 'KLoad => Operand k1 -> Operand k2 -> Instruction 'KLoad
   Add :: AddOperands atk k1 k2 ~ 'KAdd => ArithmeticType atk -> Operand k1 -> Operand k2 -> Instruction 'KAdd
@@ -256,6 +266,7 @@ data Instruction :: InstructionKind -> * where
   Res :: ResOperands k1 k2 ~ 'KRes => Operand k1 -> Operand k2 -> Instruction 'KRes
   Set :: SetOperands k1 k2 ~ 'KSet => Operand k1 -> Operand k2 -> Instruction 'KSet
   Swap :: SwapOperand ok ~ 'KSwap => Operand ok -> Instruction 'KSwap
+  Rotate :: RotateOperand ok ~ 'KRotate => RotateDirection -> RotateType -> Operand ok -> Instruction 'KRotate
 
 -- TODO: implement
 executeInstruction :: Instruction k -> IO ()
@@ -299,6 +310,11 @@ executeInstruction ins@(Set _ _) = setIns ins where
 executeInstruction ins@(Swap _) = swapIns ins where
   swapIns :: Instruction 'KSwap -> IO ()
   swapIns _ = undefined
+executeInstruction ins@(Rotate _ _ _) = rotateIns ins where
+  rotateIns :: Instruction 'KRotate -> IO ()
+  rotateIns (Rotate RotateRight DefaultRotate _) = undefined
+  rotateIns (Rotate RotateLeft ThroughCarry _) = undefined
+  rotateIns _ = undefined
 
 someFunc :: IO ()
 someFunc = do

@@ -122,6 +122,7 @@ data InstructionKind
   | KBit
   | KRes
   | KSet
+  | KSwap
   | KInvalid
 
 type family LoadOperands (k1 :: OperandKind) (k2 :: OperandKind) :: InstructionKind where
@@ -236,6 +237,11 @@ type family SetOperands (k1 :: OperandKind) (k2 :: OperandKind) :: InstructionKi
   SetOperands 'KUimm3 ('KIndirect ('KReg16 'H 'L)) = 'KSet
   SetOperands _ _ = 'KInvalid
 
+type family SwapOperand (ok :: OperandKind) :: InstructionKind where
+  SwapOperand ('KReg8 _) = 'KSwap
+  SwapOperand ('KIndirect ('KReg16 'H 'L)) = 'KSwap
+  SwapOperand _ = 'KInvalid
+
 data Instruction :: InstructionKind -> * where
   Load :: LoadOperands k1 k2 ~ 'KLoad => Operand k1 -> Operand k2 -> Instruction 'KLoad
   Add :: AddOperands atk k1 k2 ~ 'KAdd => ArithmeticType atk -> Operand k1 -> Operand k2 -> Instruction 'KAdd
@@ -249,6 +255,7 @@ data Instruction :: InstructionKind -> * where
   Bit :: BitOperands k1 k2 ~ 'KBit => Operand k1 -> Operand k2 -> Instruction 'KBit
   Res :: ResOperands k1 k2 ~ 'KRes => Operand k1 -> Operand k2 -> Instruction 'KRes
   Set :: SetOperands k1 k2 ~ 'KSet => Operand k1 -> Operand k2 -> Instruction 'KSet
+  Swap :: SwapOperand ok ~ 'KSwap => Operand ok -> Instruction 'KSwap
 
 -- TODO: implement
 executeInstruction :: Instruction k -> IO ()
@@ -289,6 +296,9 @@ executeInstruction ins@(Res _ _) = resIns ins where
 executeInstruction ins@(Set _ _) = setIns ins where
   setIns :: Instruction 'KSet -> IO ()
   setIns _ = undefined
+executeInstruction ins@(Swap _) = swapIns ins where
+  swapIns :: Instruction 'KSwap -> IO ()
+  swapIns _ = undefined
 
 someFunc :: IO ()
 someFunc = do

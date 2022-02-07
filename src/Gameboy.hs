@@ -123,6 +123,7 @@ data InstructionKind
   | KSet
   | KSwap
   | KRotate
+  | KShift
   | KInvalid
 
 type family LoadOperands (k1 :: OperandKind) (k2 :: OperandKind) :: InstructionKind where
@@ -251,6 +252,29 @@ type family RotateOperand (ok :: OperandKind) where
   RotateOperand ('KIndirect ('KReg16 'H 'L)) = 'KRotate
   RotateOperand _ = 'KInvalid
 
+data ShiftDirectionKind = KShiftRight | KShiftLeft
+
+data ShiftDirection :: ShiftDirectionKind -> * where
+  ShiftRight :: ShiftDirection 'KShiftRight
+  ShiftLeft :: ShiftDirection 'KShiftLeft
+
+data ShiftTypeKind = KShiftLogically | KShiftArithmetically
+
+data ShiftType :: ShiftTypeKind -> * where
+  ShiftLogically :: ShiftType 'KShiftLogically
+  ShiftArithmetically :: ShiftType 'KShiftArithmetically
+
+type family ShiftOperands (k1 :: OperandKind) (k2 :: OperandKind) :: InstructionKind where
+  ShiftOperands ('KReg8 _) ('KIndirect ('KReg16 'H 'L)) = 'KShift
+  ShiftOperands _ _ = 'KInvalid
+
+data ShiftInstructionValidity = ValidShift | InvalidShift
+
+type family ShiftInstruction (dk :: ShiftDirectionKind) (tk :: ShiftTypeKind) :: ShiftInstructionValidity where
+  ShiftInstruction 'KShiftRight _ = 'ValidShift
+  ShiftInstruction 'KShiftLeft 'KShiftArithmetically = 'ValidShift
+  ShiftInstruction _ _ = 'InvalidShift
+
 data Instruction :: InstructionKind -> * where
   Load :: LoadOperands k1 k2 ~ 'KLoad => Operand k1 -> Operand k2 -> Instruction 'KLoad
   Add :: AddOperands atk k1 k2 ~ 'KAdd => ArithmeticType atk -> Operand k1 -> Operand k2 -> Instruction 'KAdd
@@ -266,6 +290,7 @@ data Instruction :: InstructionKind -> * where
   Set :: SetOperands k1 k2 ~ 'KSet => Operand k1 -> Operand k2 -> Instruction 'KSet
   Swap :: SwapOperand ok ~ 'KSwap => Operand ok -> Instruction 'KSwap
   Rotate :: RotateOperand ok ~ 'KRotate => RotateDirection -> RotateType -> Operand ok -> Instruction 'KRotate
+  Shift :: (ShiftOperands k1 k2 ~ 'KShift, ShiftInstruction dk tk ~'ValidShift) => ShiftDirection dk -> ShiftType tk -> Operand k1 -> Operand k2 -> Instruction 'KShift
 
 -- TODO: implement
 executeInstruction :: Instruction k -> IO ()
@@ -314,6 +339,11 @@ executeInstruction ins@(Rotate _ _ _) = rotateIns ins where
   rotateIns (Rotate RotateRight DefaultRotate _) = undefined
   rotateIns (Rotate RotateLeft ThroughCarry _) = undefined
   rotateIns _ = undefined
+executeInstruction ins@(Shift {}) = shiftIns ins where
+  shiftIns :: Instruction 'KShift -> IO ()
+  shiftIns (Shift ShiftRight ShiftLogically _ _) = undefined
+  shiftIns (Shift ShiftLeft ShiftArithmetically _ _) = undefined
+  shiftIns _ = undefined
 
 someFunc :: IO ()
 someFunc = do

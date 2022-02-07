@@ -1,9 +1,8 @@
 {-# LANGUAGE GADTs, DataKinds, TypeFamilies, StandaloneDeriving, ConstraintKinds, TypeOperators #-}
-
-
 module Gameboy
     ( someFunc
-    ) where
+    )
+where
 
 import Data.Int
 import Data.Word

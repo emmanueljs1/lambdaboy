@@ -247,7 +247,7 @@ data RotateType = DefaultRotate | ThroughCarry
 
 data RotateDirection = RotateRight | RotateLeft
 
-type family RotateOperand (ok :: OperandKind) where
+type family RotateOperand (ok :: OperandKind) :: InstructionKind where
   RotateOperand ('KReg8 _) = 'KRotate
   RotateOperand ('KIndirect ('KReg16 'H 'L)) = 'KRotate
   RotateOperand _ = 'KInvalid
@@ -294,17 +294,17 @@ data Instruction :: InstructionKind -> * where
 
 -- TODO: implement
 executeInstruction :: Instruction k -> IO ()
-executeInstruction ins@(Load _ _) = loadIns ins where
+executeInstruction ins@(Load {}) = loadIns ins where
   loadIns :: Instruction 'KLoad -> IO ()
   loadIns _ = undefined
-executeInstruction ins@(Add _ _ _) = addIns ins where
+executeInstruction ins@(Add {}) = addIns ins where
   addIns :: Instruction 'KAdd -> IO ()
   addIns (Add WithCarryIncluded _ _) = undefined
   addIns (Add WithoutCarryIncluded _ _) = undefined
-executeInstruction ins@(And _ _) = andIns ins where
+executeInstruction ins@(And {}) = andIns ins where
   andIns :: Instruction 'KAnd -> IO ()
   andIns _ = undefined
-executeInstruction ins@(Compare _ _) = compareIns ins where
+executeInstruction ins@(Compare {}) = compareIns ins where
   compareIns :: Instruction 'KCompare -> IO ()
   compareIns _ = undefined
 executeInstruction ins@(Decrement _) = decrementIns ins where
@@ -313,28 +313,28 @@ executeInstruction ins@(Decrement _) = decrementIns ins where
 executeInstruction ins@(Increment _) = incrementIns ins where
   incrementIns :: Instruction 'KIncrement -> IO ()
   incrementIns _ = undefined
-executeInstruction ins@(Or _ _) = orIns ins where
+executeInstruction ins@(Or {}) = orIns ins where
   orIns :: Instruction 'KOr -> IO ()
   orIns = undefined
-executeInstruction ins@(Sub _ _ _) = subIns ins where
+executeInstruction ins@(Sub {}) = subIns ins where
   subIns :: Instruction 'KSub -> IO ()
   subIns = undefined
-executeInstruction ins@(Xor _ _) = xorIns ins where
+executeInstruction ins@(Xor {}) = xorIns ins where
   xorIns :: Instruction 'KXor -> IO ()
   xorIns _ = undefined
-executeInstruction ins@(Bit _ _) = bitIns ins where
+executeInstruction ins@(Bit {}) = bitIns ins where
   bitIns :: Instruction 'KBit -> IO ()
   bitIns (Bit (Uimm3 Uimm3Nat) _) = undefined
-executeInstruction ins@(Res _ _) = resIns ins where
+executeInstruction ins@(Res {}) = resIns ins where
   resIns :: Instruction 'KRes -> IO ()
   resIns _ = undefined
-executeInstruction ins@(Set _ _) = setIns ins where
+executeInstruction ins@(Set {}) = setIns ins where
   setIns :: Instruction 'KSet -> IO ()
   setIns _ = undefined
 executeInstruction ins@(Swap _) = swapIns ins where
   swapIns :: Instruction 'KSwap -> IO ()
   swapIns _ = undefined
-executeInstruction ins@(Rotate _ _ _) = rotateIns ins where
+executeInstruction ins@(Rotate {}) = rotateIns ins where
   rotateIns :: Instruction 'KRotate -> IO ()
   rotateIns (Rotate RotateRight DefaultRotate _) = undefined
   rotateIns (Rotate RotateLeft ThroughCarry _) = undefined

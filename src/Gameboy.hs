@@ -118,6 +118,7 @@ data InstructionKind
   | KCall
   | KJump
   | KRet
+  | KRst
   | KInvalid
 
 type family LoadOperands (k1 :: OperandKind) (k2 :: OperandKind) :: InstructionKind where
@@ -313,6 +314,24 @@ type family RetInstruction (ck :: ConditionCodeKind) (prok :: PostRetOperationKi
   RetInstruction 'KEmptyCode 'KPostRetEnableInterrupts = 'ValidRetInstruction
   RetInstruction _ _ = 'InvalidRetInstruction
 
+data RstVectorValidity = ValidRstVector | InvalidRstVector
+
+data RstVector (n :: Nat) = RstVector
+
+instance KnownNat n => Show (RstVector n) where
+  show b = "RstVector " ++ show (natVal b)
+
+type family RstVectorType (n :: Nat)  :: RstVectorValidity where
+  RstVectorType 0x00 = 'ValidRstVector
+  RstVectorType 0x08 = 'ValidRstVector
+  RstVectorType 0x10 = 'ValidRstVector
+  RstVectorType 0x18 = 'ValidRstVector
+  RstVectorType 0x20 = 'ValidRstVector
+  RstVectorType 0x28 = 'ValidRstVector
+  RstVectorType 0x30 = 'ValidRstVector
+  RstVectorType 0x38 = 'ValidRstVector
+  RstVectorType _ = 'InvalidRstVector
+
 data Instruction :: InstructionKind -> * where
   Load :: LoadOperands k1 k2 ~ 'KLoad => Operand k1 -> Operand k2 -> Instruction 'KLoad
   Add :: AddOperands atk k1 k2 ~ 'KAdd => ArithmeticType atk -> Operand k1 -> Operand k2 -> Instruction 'KAdd
@@ -332,6 +351,7 @@ data Instruction :: InstructionKind -> * where
   Call :: ConditionCode ck -> Operand 'KUimm16 -> Instruction 'KCall
   Jump :: JumpOperand ck ok ~ 'KJump => ConditionCode ck -> Operand ok -> Instruction 'KJump
   Ret :: RetInstruction ck prok ~ 'ValidRetInstruction => ConditionCode ck -> PostRetOperation prok -> Instruction 'KRet
+  Rst :: RstVectorType n ~ 'ValidRstVector => RstVector n -> Instruction 'KRst
 
 -- TODO: implement
 executeInstruction :: Instruction k -> IO ()
@@ -400,6 +420,9 @@ executeInstruction ins@(Ret {}) = retIns ins where
   retIns :: Instruction 'KRet -> IO ()
   retIns (Ret _ PostRetNoop) = undefined
   retIns (Ret _ PostRetEnableInterrupts) = undefined
+executeInstruction ins@(Rst {}) = rstIns ins where
+  rstIns :: Instruction 'KRst -> IO ()
+  rstIns (Rst RstVector) = undefined
 
 someFunc :: IO ()
 someFunc = do

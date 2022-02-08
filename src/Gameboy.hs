@@ -52,6 +52,7 @@ data OperandKind
   | KFF00Offset OffsetType
   | KStackPointer StackPointerOperationKind
   | KPostInstruction OperandKind PostInstructionOperationKind
+  | KRegAF
 
 data Addressable = Addresable | NotAddressable
 
@@ -96,6 +97,7 @@ data Operand :: OperandKind -> * where
   FF00Offset :: Offset ok ~ 'Offsetable ot => Operand ok -> Operand ('KFF00Offset ot)
   StackPointer :: StackPointerOperation k -> Operand ('KStackPointer k)
   PostInstruction :: PostOperation ok piok ~ 'PostOperable => Operand ok -> PostInstructionOperation piok -> Operand ('KPostInstruction ok piok)
+  RegAF :: Operand 'KRegAF
 
 deriving instance Show (Operand ok)
 
@@ -119,6 +121,16 @@ data InstructionKind
   | KJump
   | KRet
   | KRst
+  | KPop
+  | KPush
+  | KComplementCarryFlag
+  | KComplementAcc
+  | KDecimalAdjustAcc
+  | KToggleInterrupts
+  | KHalt
+  | KNop
+  | KSetCarryFlag
+  | KStop
   | KInvalid
 
 type family LoadOperands (k1 :: OperandKind) (k2 :: OperandKind) :: InstructionKind where
@@ -332,6 +344,16 @@ type family RstVectorType (n :: Nat)  :: RstVectorValidity where
   RstVectorType 0x38 = 'ValidRstVector
   RstVectorType _ = 'InvalidRstVector
 
+type family PopOperand (ok :: OperandKind) :: InstructionKind where
+  PopOperand 'KRegAF = 'KPop
+  PopOperand ('KReg16 _ _) = 'KPop
+  PopOperand _ = 'KInvalid
+
+type family PushOperand (ok :: OperandKind) :: InstructionKind where
+  PushOperand 'KRegAF = 'KPush
+  PushOperand ('KReg16 _ _) = 'KPush
+  PushOperand _ = 'KInvalid
+
 data Instruction :: InstructionKind -> * where
   Load :: LoadOperands k1 k2 ~ 'KLoad => Operand k1 -> Operand k2 -> Instruction 'KLoad
   Add :: AddOperands atk k1 k2 ~ 'KAdd => ArithmeticType atk -> Operand k1 -> Operand k2 -> Instruction 'KAdd
@@ -352,6 +374,16 @@ data Instruction :: InstructionKind -> * where
   Jump :: JumpOperand ck ok ~ 'KJump => ConditionCode ck -> Operand ok -> Instruction 'KJump
   Ret :: RetInstruction ck prok ~ 'ValidRetInstruction => ConditionCode ck -> PostRetOperation prok -> Instruction 'KRet
   Rst :: RstVectorType n ~ 'ValidRstVector => RstVector n -> Instruction 'KRst
+  Pop :: PopOperand ok ~ 'KPop => Operand ok -> Instruction 'KPop
+  Push :: PushOperand ok ~ 'KPush => Operand ok -> Instruction 'KPush
+  ComplementCarryFlag :: Instruction 'KComplementCarryFlag
+  ComplementAcc :: Instruction 'KComplementAcc
+  DecimalAdjustAcc :: Instruction 'KDecimalAdjustAcc
+  ToggleInterrupts :: Bool -> Instruction 'KToggleInterrupts
+  Halt :: Instruction 'KHalt
+  Nop :: Instruction 'KNop
+  SetCarryFlag :: Instruction 'KSetCarryFlag
+  Stop :: Instruction 'KStop
 
 -- TODO: implement
 executeInstruction :: Instruction k -> IO ()
@@ -423,6 +455,36 @@ executeInstruction ins@(Ret {}) = retIns ins where
 executeInstruction ins@(Rst {}) = rstIns ins where
   rstIns :: Instruction 'KRst -> IO ()
   rstIns (Rst RstVector) = undefined
+executeInstruction ins@(Pop {}) = popIns ins where
+  popIns :: Instruction 'KPop -> IO ()
+  popIns _ = undefined
+executeInstruction ins@(Push {}) = pushIns ins where
+  pushIns :: Instruction 'KPush -> IO ()
+  pushIns _ = undefined
+executeInstruction ins@ComplementCarryFlag = ccfIns ins where
+  ccfIns :: Instruction 'KComplementCarryFlag -> IO ()
+  ccfIns _ = undefined
+executeInstruction ins@ComplementAcc = cplIns ins where
+  cplIns :: Instruction 'KComplementAcc -> IO ()
+  cplIns _ = undefined
+executeInstruction ins@DecimalAdjustAcc = daaIns ins where
+  daaIns :: Instruction 'KDecimalAdjustAcc -> IO ()
+  daaIns _ = undefined
+executeInstruction ins@(ToggleInterrupts {}) = toggleInterruptsIns ins where
+  toggleInterruptsIns :: Instruction 'KToggleInterrupts -> IO ()
+  toggleInterruptsIns _ = undefined
+executeInstruction ins@Halt = haltIns ins where
+  haltIns :: Instruction 'KHalt -> IO ()
+  haltIns _ = undefined
+executeInstruction ins@Nop = nopIns ins where
+  nopIns :: Instruction 'KNop -> IO ()
+  nopIns _ = undefined
+executeInstruction ins@SetCarryFlag = scfIns ins where
+  scfIns :: Instruction 'KSetCarryFlag -> IO ()
+  scfIns _ = undefined
+executeInstruction ins@Stop = stopIns ins where
+  stopIns :: Instruction 'KStop -> IO ()
+  stopIns _ = undefined
 
 someFunc :: IO ()
 someFunc = do

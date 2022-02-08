@@ -1,40 +1,12 @@
-{-# LANGUAGE GADTs, DataKinds, TypeFamilies, StandaloneDeriving, ConstraintKinds, TypeOperators #-}
 module Gameboy
     ( someFunc
     )
 where
 
+import Registers
 import Data.Int
 import Data.Word
 import GHC.TypeLits
-
-data RegType
-  = A
-  | B
-  | C
-  | D
-  | E
-  | H
-  | L
-
-data RegsCompatible = RegsCompatible | RegsNotCompatible
-
-type family CombinedRegs (r1 :: RegType) (r2 :: RegType) :: RegsCompatible where
-  CombinedRegs 'B 'C = 'RegsCompatible
-  CombinedRegs 'D 'E = 'RegsCompatible
-  CombinedRegs 'H 'L = 'RegsCompatible
-  CombinedRegs _ _ = 'RegsNotCompatible
-
-data Reg :: RegType -> * where
-  RegA :: Reg 'A
-  RegB :: Reg 'B
-  RegC :: Reg 'C
-  RegD :: Reg 'D
-  RegE :: Reg 'E
-  RegH :: Reg 'H
-  RegL :: Reg 'L
-
-deriving instance Show (Reg rt)
 
 data OffsetType = RegCOffset | Uimm8Offset
 
@@ -387,7 +359,7 @@ data Instruction :: InstructionKind -> * where
 
 -- TODO: implement
 executeInstruction :: Instruction k -> IO ()
-executeInstruction ins@(Load {}) = loadIns ins where
+executeInstruction ins@Load {} = loadIns ins where
   loadIns :: Instruction 'KLoad -> IO ()
   loadIns _ = undefined
 executeInstruction ins@(Add {}) = addIns ins where

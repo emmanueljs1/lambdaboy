@@ -24,6 +24,11 @@ dependencies:
 
 library:
   source-dirs: src
+  exposed-modules:
+    - Gameboy
+  other-modules:
+    - Registers
+  default-extensions: GADTs, DataKinds, TypeFamilies, StandaloneDeriving, ConstraintKinds, TypeOperators
 
 executables:
   lambdaboy-exe:

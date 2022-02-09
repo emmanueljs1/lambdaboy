@@ -27,8 +27,10 @@ library:
   exposed-modules:
     - Gameboy
   other-modules:
+    - Instruction
+    - Operand
     - Registers
-  default-extensions: GADTs, DataKinds, TypeFamilies, StandaloneDeriving, ConstraintKinds, TypeOperators
+  default-extensions: GADTs, DataKinds, TypeFamilies, StandaloneDeriving, ConstraintKinds, TypeOperators, RankNTypes, PolyKinds
 
 executables:
   lambdaboy-exe:

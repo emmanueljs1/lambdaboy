@@ -27,11 +27,13 @@ library
   exposed-modules:
       Gameboy
   other-modules:
+      Instruction
+      Operand
       Registers
   hs-source-dirs:
       src
   default-extensions:
-      GADTs, DataKinds, TypeFamilies, StandaloneDeriving, ConstraintKinds, TypeOperators
+      GADTs, DataKinds, TypeFamilies, StandaloneDeriving, ConstraintKinds, TypeOperators, RankNTypes, PolyKinds
   build-depends:
       base >=4.7 && <5
   default-language: Haskell2010

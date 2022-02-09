@@ -107,9 +107,11 @@ data ConditionCode :: ConditionCodeKind -> * where
   NegateCode :: ConditionCode 'KNegateCode
   EmptyCode :: ConditionCode 'KEmptyCode
 
+deriving instance Show (ConditionCode cck)
+
 data RstVectorValidity = ValidRstVector | InvalidRstVector
 
-type family RstVectorType (n :: Nat)  :: RstVectorValidity where
+type family RstVectorType (n :: Nat):: RstVectorValidity where
   RstVectorType 0x00 = 'ValidRstVector
   RstVectorType 0x08 = 'ValidRstVector
   RstVectorType 0x10 = 'ValidRstVector
@@ -121,7 +123,7 @@ type family RstVectorType (n :: Nat)  :: RstVectorValidity where
   RstVectorType _ = 'InvalidRstVector
 
 data RstVector :: Nat -> * where
-  RstVector :: RstVectorType n ~ 'ValidRstVector => RstVector n
+  RstVector :: (KnownNat n, RstVectorType n ~ 'ValidRstVector) => RstVector n
 
 instance KnownNat n => Show (RstVector n) where
   show b = "RstVector " ++ show (natVal b)

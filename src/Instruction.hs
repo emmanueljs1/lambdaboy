@@ -10,6 +10,8 @@ module Instruction
   )
 where
 
+import GHC.TypeLits
+
 import Operand
 import Registers
 
@@ -89,6 +91,8 @@ data ArithmeticTypeKind = KWithCarryIncluded | KWithoutCarryIncluded
 data ArithmeticType :: ArithmeticTypeKind -> * where
   WithCarryIncluded :: ArithmeticType 'KWithCarryIncluded
   WithoutCarryIncluded :: ArithmeticType 'KWithoutCarryIncluded
+
+deriving instance Show (ArithmeticType atk)
 
 type family AddOperands (atk :: ArithmeticTypeKind) (k1 :: OperandKind) (k2 :: OperandKind) :: InstructionKind where
   AddOperands _ ('KReg8 'A) ('KReg8 _) = 'KAdd
@@ -202,8 +206,10 @@ type family PushOperand (ok :: OperandKind) :: InstructionKind where
   PushOperand _ = 'KInvalid
 
 data RotateType = DefaultRotate | ThroughCarry
+  deriving Show
 
 data RotateDirection = RotateRight | RotateLeft
+  deriving Show
 
 data ShiftDirectionKind = KShiftRight | KShiftLeft
 
@@ -211,11 +217,15 @@ data ShiftDirection :: ShiftDirectionKind -> * where
   ShiftRight :: ShiftDirection 'KShiftRight
   ShiftLeft :: ShiftDirection 'KShiftLeft
 
+deriving instance Show (ShiftDirection sdk)
+
 data ShiftTypeKind = KShiftLogically | KShiftArithmetically
 
 data ShiftType :: ShiftTypeKind -> * where
   ShiftLogically :: ShiftType 'KShiftLogically
   ShiftArithmetically :: ShiftType 'KShiftArithmetically
+
+deriving instance Show (ShiftType stk)
 
 data PostRetOperationKind
   = KPostRetNoop
@@ -224,6 +234,8 @@ data PostRetOperationKind
 data PostRetOperation :: PostRetOperationKind -> * where
   PostRetNoop :: PostRetOperation 'KPostRetNoop
   PostRetEnableInterrupts :: PostRetOperation 'KPostRetEnableInterrupts
+
+deriving instance Show (PostRetOperation prok)
 
 data Instruction :: InstructionKind -> * where
   Load :: LoadOperands k1 k2 ~ 'KLoad => Operand k1 -> Operand k2 -> Instruction 'KLoad
@@ -235,16 +247,16 @@ data Instruction :: InstructionKind -> * where
   Or :: OrOperands k1 k2 ~ 'KOr => Operand k1 -> Operand k2 -> Instruction 'KOr
   Sub :: SubOperands k1 k2 ~ 'KSub => ArithmeticType atk -> Operand k1 -> Operand k2 -> Instruction 'KSub
   Xor :: XorOperands k1 k2 ~ 'KXor => Operand k1 -> Operand k2 -> Instruction 'KXor
-  Bit :: BitOperands ok ~ 'KBit => Uimm3 n -> Operand ok -> Instruction 'KBit
-  Res :: ResOperands ok ~ 'KRes => Uimm3 n -> Operand ok -> Instruction 'KRes
-  Set :: SetOperands ok ~ 'KSet => Uimm3 n -> Operand ok -> Instruction 'KSet
+  Bit :: (KnownNat n, BitOperands ok ~ 'KBit) => Uimm3 n -> Operand ok -> Instruction 'KBit
+  Res :: (KnownNat n, ResOperands ok ~ 'KRes) => Uimm3 n -> Operand ok -> Instruction 'KRes
+  Set :: (KnownNat n, SetOperands ok ~ 'KSet) => Uimm3 n -> Operand ok -> Instruction 'KSet
   Swap :: SwapOperand ok ~ 'KSwap => Operand ok -> Instruction 'KSwap
   Rotate :: RotateOperand ok ~ 'KRotate => RotateDirection -> RotateType -> Operand ok -> Instruction 'KRotate
   Shift :: (ShiftOperands k1 k2 ~ 'KShift, ShiftInstruction dk tk ~'ValidShift) => ShiftDirection dk -> ShiftType tk -> Operand k1 -> Operand k2 -> Instruction 'KShift
   Call :: ConditionCode ck -> Operand 'KUimm16 -> Instruction 'KCall
   Jump :: JumpOperand ck ok ~ 'KJump => ConditionCode ck -> Operand ok -> Instruction 'KJump
   Ret :: RetInstruction ck prok ~ 'ValidRetInstruction => ConditionCode ck -> PostRetOperation prok -> Instruction 'KRet
-  Rst :: RstVector n -> Instruction 'KRst
+  Rst :: KnownNat n => RstVector n -> Instruction 'KRst
   Pop :: PopOperand ok ~ 'KPop => Operand ok -> Instruction 'KPop
   Push :: PushOperand ok ~ 'KPush => Operand ok -> Instruction 'KPush
   ComplementCarryFlag :: Instruction 'KComplementCarryFlag
@@ -255,3 +267,5 @@ data Instruction :: InstructionKind -> * where
   Nop :: Instruction 'KNop
   SetCarryFlag :: Instruction 'KSetCarryFlag
   Stop :: Instruction 'KStop
+
+deriving instance Show (Instruction ik)

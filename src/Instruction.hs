@@ -10,6 +10,7 @@ module Instruction
   )
 where
 
+import Data.Kind
 import GHC.TypeLits
 
 import Operand
@@ -88,7 +89,7 @@ type family LoadOperands (k1 :: OperandKind) (k2 :: OperandKind) :: InstructionK
 
 data ArithmeticTypeKind = KWithCarryIncluded | KWithoutCarryIncluded
 
-data ArithmeticType :: ArithmeticTypeKind -> * where
+data ArithmeticType :: ArithmeticTypeKind -> Type where
   WithCarryIncluded :: ArithmeticType 'KWithCarryIncluded
   WithoutCarryIncluded :: ArithmeticType 'KWithoutCarryIncluded
 
@@ -213,7 +214,7 @@ data RotateDirection = RotateRight | RotateLeft
 
 data ShiftDirectionKind = KShiftRight | KShiftLeft
 
-data ShiftDirection :: ShiftDirectionKind -> * where
+data ShiftDirection :: ShiftDirectionKind -> Type where
   ShiftRight :: ShiftDirection 'KShiftRight
   ShiftLeft :: ShiftDirection 'KShiftLeft
 
@@ -221,7 +222,7 @@ deriving instance Show (ShiftDirection sdk)
 
 data ShiftTypeKind = KShiftLogically | KShiftArithmetically
 
-data ShiftType :: ShiftTypeKind -> * where
+data ShiftType :: ShiftTypeKind -> Type where
   ShiftLogically :: ShiftType 'KShiftLogically
   ShiftArithmetically :: ShiftType 'KShiftArithmetically
 
@@ -231,13 +232,13 @@ data PostRetOperationKind
   = KPostRetNoop
   | KPostRetEnableInterrupts
 
-data PostRetOperation :: PostRetOperationKind -> * where
+data PostRetOperation :: PostRetOperationKind -> Type where
   PostRetNoop :: PostRetOperation 'KPostRetNoop
   PostRetEnableInterrupts :: PostRetOperation 'KPostRetEnableInterrupts
 
 deriving instance Show (PostRetOperation prok)
 
-data Instruction :: InstructionKind -> * where
+data Instruction :: InstructionKind -> Type where
   Load :: LoadOperands k1 k2 ~ 'KLoad => Operand k1 -> Operand k2 -> Instruction 'KLoad
   Add :: AddOperands atk k1 k2 ~ 'KAdd => ArithmeticType atk -> Operand k1 -> Operand k2 -> Instruction 'KAdd
   And :: AndOperands k1 k2 ~ 'KAnd => Operand k1 -> Operand k2 -> Instruction 'KAnd
@@ -252,7 +253,7 @@ data Instruction :: InstructionKind -> * where
   Set :: (KnownNat n, SetOperands ok ~ 'KSet) => Uimm3 n -> Operand ok -> Instruction 'KSet
   Swap :: SwapOperand ok ~ 'KSwap => Operand ok -> Instruction 'KSwap
   Rotate :: RotateOperand ok ~ 'KRotate => RotateDirection -> RotateType -> Operand ok -> Instruction 'KRotate
-  Shift :: (ShiftOperands k1 k2 ~ 'KShift, ShiftInstruction dk tk ~'ValidShift) => ShiftDirection dk -> ShiftType tk -> Operand k1 -> Operand k2 -> Instruction 'KShift
+  Shift :: (ShiftOperands k1 k2 ~ 'KShift, ShiftInstruction dk tk ~ 'ValidShift) => ShiftDirection dk -> ShiftType tk -> Operand k1 -> Operand k2 -> Instruction 'KShift
   Call :: ConditionCode ck -> Operand 'KUimm16 -> Instruction 'KCall
   Jump :: JumpOperand ck ok ~ 'KJump => ConditionCode ck -> Operand ok -> Instruction 'KJump
   Ret :: RetInstruction ck prok ~ 'ValidRetInstruction => ConditionCode ck -> PostRetOperation prok -> Instruction 'KRet

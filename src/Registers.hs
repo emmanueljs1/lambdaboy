@@ -6,6 +6,8 @@ module Registers
   )
 where
 
+import Data.Kind
+
 data RegType
   = A
   | B
@@ -23,7 +25,7 @@ type family CombinedRegs (r1 :: RegType) (r2 :: RegType) :: RegsCompatible where
   CombinedRegs 'H 'L = 'RegsCompatible
   CombinedRegs _ _ = 'RegsNotCompatible
 
-data Reg :: RegType -> * where
+data Reg :: RegType -> Type where
   RegA :: Reg 'A
   RegB :: Reg 'B
   RegC :: Reg 'C

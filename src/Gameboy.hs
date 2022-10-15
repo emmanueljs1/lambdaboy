@@ -11,7 +11,7 @@ executeInstruction :: Instruction k -> IO ()
 executeInstruction ins@Load {} = loadIns ins where
   loadIns :: Instruction 'KLoad -> IO ()
   loadIns _ = undefined
-executeInstruction ins@(Add {}) = addIns ins where
+executeInstruction ins@Add {} = addIns ins where
   addIns :: Instruction 'KAdd -> IO ()
   addIns (Add WithCarryIncluded _ _) = undefined
   addIns (Add WithoutCarryIncluded _ _) = undefined

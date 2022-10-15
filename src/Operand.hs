@@ -13,6 +13,7 @@ module Operand
 where
 
 import Data.Int
+import Data.Kind
 import Data.Word
 import GHC.TypeLits
 
@@ -50,13 +51,13 @@ type family Offset (ok :: OperandKind) :: Offsetable where
   Offset ('KReg8 'C) = 'Offsetable 'RegCOffset
   Offset _ = 'NotOffsetable
 
-data StackPointerOperation :: StackPointerOperationKind -> * where
+data StackPointerOperation :: StackPointerOperationKind -> Type where
   Unchanged :: StackPointerOperation 'KUnchanged
   AddInt8 :: Int8 -> StackPointerOperation 'KAddInt8
 
 deriving instance Show (StackPointerOperation spo)
 
-data PostInstructionOperation :: PostInstructionOperationKind -> * where
+data PostInstructionOperation :: PostInstructionOperationKind -> Type where
   IncrementAfter :: PostInstructionOperation 'KIncrementAfter
   DecrementAfter :: PostInstructionOperation 'KDecrementAfter
 
@@ -69,7 +70,7 @@ type family PostOperation (ok :: OperandKind) (piok :: PostInstructionOperationK
   PostOperation ('KReg16 'H 'L) 'KDecrementAfter = 'PostOperable
   PostOperation _ _ = 'NotPostOperable
 
-data Operand :: OperandKind -> * where
+data Operand :: OperandKind -> Type where
   Uimm8 :: Word8 -> Operand 'KUimm8
   Imm8 :: Int8 -> Operand 'KImm8
   Reg8 :: Reg r -> Operand ('KReg8 r)
@@ -85,7 +86,7 @@ deriving instance Show (Operand ok)
 
 type Only3Bits (n :: Nat) = (KnownNat n, 0 <= n, n <= 7)
 
-data Uimm3 :: Nat -> * where
+data Uimm3 :: Nat -> Type where
   Uimm3 :: Only3Bits n => Uimm3 n
 
 instance KnownNat n => Show (Uimm3 n) where
@@ -99,7 +100,7 @@ data ConditionCodeKind
   | KNegateCode
   | KEmptyCode
 
-data ConditionCode :: ConditionCodeKind -> * where
+data ConditionCode :: ConditionCodeKind -> Type where
   CodeZ :: ConditionCode 'KCodeZ
   CodeNZ :: ConditionCode 'KCodeNZ
   CodeC :: ConditionCode 'KCodeC
@@ -122,7 +123,7 @@ type family RstVectorType (n :: Nat):: RstVectorValidity where
   RstVectorType 0x38 = 'ValidRstVector
   RstVectorType _ = 'InvalidRstVector
 
-data RstVector :: Nat -> * where
+data RstVector :: Nat -> Type where
   RstVector :: (KnownNat n, RstVectorType n ~ 'ValidRstVector) => RstVector n
 
 instance KnownNat n => Show (RstVector n) where

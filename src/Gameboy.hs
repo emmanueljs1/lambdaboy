@@ -15,10 +15,10 @@ executeInstruction ins@Add {} = addIns ins where
   addIns :: Instruction 'KAdd -> IO ()
   addIns (Add WithCarryIncluded _ _) = undefined
   addIns (Add WithoutCarryIncluded _ _) = undefined
-executeInstruction ins@(And {}) = andIns ins where
+executeInstruction ins@And {} = andIns ins where
   andIns :: Instruction 'KAnd -> IO ()
   andIns _ = undefined
-executeInstruction ins@(Compare {}) = compareIns ins where
+executeInstruction ins@Compare {} = compareIns ins where
   compareIns :: Instruction 'KCompare -> IO ()
   compareIns _ = undefined
 executeInstruction ins@(Decrement _) = decrementIns ins where
@@ -27,38 +27,38 @@ executeInstruction ins@(Decrement _) = decrementIns ins where
 executeInstruction ins@(Increment _) = incrementIns ins where
   incrementIns :: Instruction 'KIncrement -> IO ()
   incrementIns _ = undefined
-executeInstruction ins@(Or {}) = orIns ins where
+executeInstruction ins@Or {} = orIns ins where
   orIns :: Instruction 'KOr -> IO ()
   orIns = undefined
-executeInstruction ins@(Sub {}) = subIns ins where
+executeInstruction ins@Sub {} = subIns ins where
   subIns :: Instruction 'KSub -> IO ()
   subIns = undefined
-executeInstruction ins@(Xor {}) = xorIns ins where
+executeInstruction ins@Xor {} = xorIns ins where
   xorIns :: Instruction 'KXor -> IO ()
   xorIns _ = undefined
-executeInstruction ins@(Bit {}) = bitIns ins where
+executeInstruction ins@Bit {} = bitIns ins where
   bitIns :: Instruction 'KBit -> IO ()
   bitIns (Bit Uimm3 _) = undefined
-executeInstruction ins@(Res {}) = resIns ins where
+executeInstruction ins@Res {} = resIns ins where
   resIns :: Instruction 'KRes -> IO ()
   resIns _ = undefined
-executeInstruction ins@(Set {}) = setIns ins where
+executeInstruction ins@Set {} = setIns ins where
   setIns :: Instruction 'KSet -> IO ()
   setIns _ = undefined
 executeInstruction ins@(Swap _) = swapIns ins where
   swapIns :: Instruction 'KSwap -> IO ()
   swapIns _ = undefined
-executeInstruction ins@(Rotate {}) = rotateIns ins where
+executeInstruction ins@Rotate {} = rotateIns ins where
   rotateIns :: Instruction 'KRotate -> IO ()
   rotateIns (Rotate RotateRight DefaultRotate _) = undefined
   rotateIns (Rotate RotateLeft ThroughCarry _) = undefined
   rotateIns _ = undefined
-executeInstruction ins@(Shift {}) = shiftIns ins where
+executeInstruction ins@Shift {} = shiftIns ins where
   shiftIns :: Instruction 'KShift -> IO ()
   shiftIns (Shift ShiftRight ShiftLogically _ _) = undefined
   shiftIns (Shift ShiftLeft ShiftArithmetically _ _) = undefined
   shiftIns _ = undefined
-executeInstruction ins@(Call {}) = callIns ins where
+executeInstruction ins@Call {} = callIns ins where
   callIns :: Instruction 'KCall -> IO ()
   callIns (Call CodeZ _) = undefined
   callIns (Call CodeNZ _) = undefined
@@ -66,20 +66,20 @@ executeInstruction ins@(Call {}) = callIns ins where
   callIns (Call CodeNC _) = undefined
   callIns (Call NegateCode _) = undefined
   callIns (Call EmptyCode _) = undefined
-executeInstruction ins@(Jump {}) = jumpIns ins where
+executeInstruction ins@Jump {} = jumpIns ins where
   jumpIns :: Instruction 'KJump -> IO ()
   jumpIns _ = undefined
-executeInstruction ins@(Ret {}) = retIns ins where
+executeInstruction ins@Ret {} = retIns ins where
   retIns :: Instruction 'KRet -> IO ()
   retIns (Ret _ PostRetNoop) = undefined
   retIns (Ret _ PostRetEnableInterrupts) = undefined
-executeInstruction ins@(Rst {}) = rstIns ins where
+executeInstruction ins@Rst {} = rstIns ins where
   rstIns :: Instruction 'KRst -> IO ()
   rstIns (Rst RstVector) = undefined
-executeInstruction ins@(Pop {}) = popIns ins where
+executeInstruction ins@Pop {} = popIns ins where
   popIns :: Instruction 'KPop -> IO ()
   popIns _ = undefined
-executeInstruction ins@(Push {}) = pushIns ins where
+executeInstruction ins@Push {} = pushIns ins where
   pushIns :: Instruction 'KPush -> IO ()
   pushIns _ = undefined
 executeInstruction ins@ComplementCarryFlag = ccfIns ins where
@@ -91,7 +91,7 @@ executeInstruction ins@ComplementAcc = cplIns ins where
 executeInstruction ins@DecimalAdjustAcc = daaIns ins where
   daaIns :: Instruction 'KDecimalAdjustAcc -> IO ()
   daaIns _ = undefined
-executeInstruction ins@(ToggleInterrupts {}) = toggleInterruptsIns ins where
+executeInstruction ins@ToggleInterrupts {} = toggleInterruptsIns ins where
   toggleInterruptsIns :: Instruction 'KToggleInterrupts -> IO ()
   toggleInterruptsIns _ = undefined
 executeInstruction ins@Halt = haltIns ins where

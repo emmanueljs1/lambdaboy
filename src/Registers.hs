@@ -17,13 +17,12 @@ data RegType
   | H
   | L
 
-data RegsCompatible = RegsCompatible | RegsNotCompatible
+data RegsCompatible = RegsCompatible
 
 type family CombinedRegs (r1 :: RegType) (r2 :: RegType) :: RegsCompatible where
   CombinedRegs 'B 'C = 'RegsCompatible
   CombinedRegs 'D 'E = 'RegsCompatible
   CombinedRegs 'H 'L = 'RegsCompatible
-  CombinedRegs _ _ = 'RegsNotCompatible
 
 data Reg :: RegType -> Type where
   RegA :: Reg 'A

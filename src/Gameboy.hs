@@ -3,14 +3,43 @@ module Gameboy
     )
 where
 
-import Operand
-import Instruction
+import Data.Array.IO
+import Data.Array.MArray()
+import Data.Word
 
--- TODO: implement
-executeInstruction :: Instruction k -> IO ()
-executeInstruction ins@Load {} = loadIns ins where
-  loadIns :: Instruction 'KLoad -> IO ()
-  loadIns _ = undefined
+import Instruction
+import Operand
+import Registers
+
+data CPU a m where
+  CPU :: MArray a Word8 m => {
+    pc :: Word16,
+    sp :: Word16,
+    ram :: a Word16 Word8,
+    registers :: Registers
+  } -> CPU a m
+
+initCPU :: (Monad m, MArray a Word8 m) => m (CPU a m)
+initCPU = do
+  arr <- newArray_ (0x0000, 0xFFFF)
+  return $ CPU {
+    pc = 0,
+    sp = 0,
+    ram = arr,
+    registers = emptyRegisters
+  }
+
+load :: forall m k1 k2 a. Monad m => LoadOperands k1 k2 ~ 'KLoad => Operand k1 -> Operand k2 -> (CPU a m -> m (CPU a m))
+load (Reg8 r1) (Reg8 r2) cpu = do
+  let regs = registers cpu
+  return $ cpu { registers = setReg r1 (reg r2 regs) regs }
+-- TODO: finish
+load _ _ _ = undefined
+
+executeInstruction :: forall a m k. Monad m => Instruction k -> CPU a m -> m (CPU a m)
+executeInstruction (Load (o1 :: Operand k1) (o2 :: Operand k2)) cpu = load o1 o2 cpu
+executeInstruction _ _ = undefined
+{- TODO: implement each of these
 executeInstruction ins@Add {} = addIns ins where
   addIns :: Instruction 'KAdd -> IO ()
   addIns (Add WithCarryIncluded _ _) = undefined
@@ -106,6 +135,11 @@ executeInstruction ins@SetCarryFlag = scfIns ins where
 executeInstruction ins@Stop = stopIns ins where
   stopIns :: Instruction 'KStop -> IO ()
   stopIns _ = undefined
+-}
 
+-- TODO: actually load a cart
 run :: IO ()
-run = executeInstruction Halt
+run = do
+  cpu <- initCPU @_ @IOArray
+  _ <- executeInstruction Halt cpu
+  return ()

@@ -43,8 +43,10 @@ library
       PolyKinds
       TypeApplications
       ScopedTypeVariables
+      FlexibleContexts
   build-depends:
       base >=4.7 && <5
+    , array
   default-language: Haskell2010
 
 executable lambdaboy-exe

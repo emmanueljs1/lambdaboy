@@ -1,5 +1,6 @@
 module Instruction
-  ( InstructionKind (..)
+  ( LoadOperands
+  , InstructionKind (..)
   , Instruction (..)
   , ArithmeticType (..)
   , RotateType (..)

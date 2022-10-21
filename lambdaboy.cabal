@@ -44,6 +44,7 @@ library
       TypeApplications
       ScopedTypeVariables
       FlexibleContexts
+      AllowAmbiguousTypes
   build-depends:
       base >=4.7 && <5
     , array
@@ -55,9 +56,12 @@ executable lambdaboy-exe
       Paths_lambdaboy
   hs-source-dirs:
       app
+  default-extensions:
+    TypeApplications
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       base >=4.7 && <5
+    , array
     , lambdaboy
   default-language: Haskell2010
 

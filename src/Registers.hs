@@ -5,11 +5,14 @@ module Registers
   , Reg (..)
   , Registers
   , emptyRegisters
-  , setReg
-  , reg
+  , setReg8
+  , reg8
+  , setReg16
+  , reg16
   )
 where
 
+import Data.Bits
 import Data.Kind
 import Data.Word
 
@@ -53,20 +56,32 @@ data Registers = Registers {
 emptyRegisters :: Registers
 emptyRegisters = Registers 0 0 0 0 0 0 0
 
-setReg :: Reg r -> Word8 -> Registers -> Registers
-setReg RegA word rs = rs { regA = word }
-setReg RegB word rs = rs { regB = word }
-setReg RegC word rs = rs { regC = word }
-setReg RegD word rs = rs { regD = word }
-setReg RegE word rs = rs { regE = word }
-setReg RegH word rs = rs { regH = word }
-setReg RegL word rs = rs { regL = word }
+setReg8 :: Reg r -> Word8 -> Registers -> Registers
+setReg8 RegA n8 rs = rs { regA = n8 }
+setReg8 RegB n8 rs = rs { regB = n8 }
+setReg8 RegC n8 rs = rs { regC = n8 }
+setReg8 RegD n8 rs = rs { regD = n8 }
+setReg8 RegE n8 rs = rs { regE = n8 }
+setReg8 RegH n8 rs = rs { regH = n8 }
+setReg8 RegL n8 rs = rs { regL = n8 }
 
-reg :: Reg r -> Registers -> Word8
-reg RegA = regA
-reg RegB = regB
-reg RegC = regC
-reg RegD = regD
-reg RegE = regE
-reg RegH = regH
-reg RegL = regL
+reg8 :: Reg r -> Registers -> Word8
+reg8 RegA = regA
+reg8 RegB = regB
+reg8 RegC = regC
+reg8 RegD = regD
+reg8 RegE = regE
+reg8 RegH = regH
+reg8 RegL = regL
+
+setReg16 :: CombinedRegs r1 r2 ~ 'RegsCompatible => Reg r1 -> Reg r2 -> Word16 -> Registers -> Registers
+setReg16 reg1 reg2 n16 rs =
+  let n8lo = fromIntegral $ shiftR (0xFF00 .&. n16) 8 in
+  let n8hi = fromIntegral $ 0x00FF .&. n16 in
+  setReg8 reg2 n8hi $ setReg8 reg1 n8lo rs
+
+reg16 :: CombinedRegs r1 r2 ~ 'RegsCompatible => Reg r1 -> Reg r2 -> Registers -> Word16
+reg16 reg1 reg2 regs =
+  let w1 = shiftL (fromIntegral $ reg8 reg1 regs) 8 in
+  let w2 = fromIntegral $ reg8 reg2 regs in
+  w1 .|. w2

@@ -3,8 +3,7 @@ module Gameboy
     )
 where
 
-import Data.Array.IO
-import Data.Array.MArray()
+import Data.Array.MArray
 import Data.Word
 
 import Instruction
@@ -29,14 +28,39 @@ initCPU = do
     registers = emptyRegisters
   }
 
-load :: forall m k1 k2 a. Monad m => LoadOperands k1 k2 ~ 'KLoad => Operand k1 -> Operand k2 -> (CPU a m -> m (CPU a m))
+load :: forall m k1 k2 a. (Monad m, MArray a Word8 m, LoadOperands k1 k2 ~ 'KLoad) => Operand k1 -> Operand k2 -> (CPU a m -> m (CPU a m))
 load (Reg8 r1) (Reg8 r2) cpu = do
   let regs = registers cpu
-  return $ cpu { registers = setReg r1 (reg r2 regs) regs }
--- TODO: finish
+  return $ cpu { registers = setReg8 r1 (reg8 r2 regs) regs }
+load (Reg8 r1) (Uimm8 n8) cpu = do
+  let regs = registers cpu
+  return $ cpu { registers = setReg8 r1 n8 regs }
+load (Reg16 r1 r2) (Uimm16 n16) cpu = do
+  let regs = registers cpu
+  return $ cpu { registers = setReg16 r1 r2 n16 regs }
+load (Indirect (Reg16 RegH RegL)) (Reg8 r) cpu = do
+  let regs = registers cpu
+  _ <- writeArray (ram cpu) (reg16 RegH RegL regs) (reg8 r regs)
+  return cpu
+load (Indirect (Reg16 RegH RegL)) (Uimm8 uimm8) cpu = do
+  let regs = registers cpu
+  _ <- writeArray (ram cpu) (reg16 RegH RegL regs) uimm8
+  return cpu
+load (Reg8 r) (Indirect (Reg16 RegH RegL)) cpu = do
+  let regs = registers cpu
+  n8 <- readArray (ram cpu) (reg16 RegH RegL regs)
+  return $ cpu { registers = setReg8 r n8 regs }
+load (Indirect (Reg16 r1 r2)) (Reg8 RegA) cpu = do
+  let regs = registers cpu
+  _ <- writeArray (ram cpu) (reg16 r1 r2 regs) (reg8 RegA regs)
+  return cpu
+load (Indirect (Uimm16 n16)) (Reg8 RegA) cpu = do
+  let regs = registers cpu
+  _ <- writeArray (ram cpu) n16 (reg8 RegA regs)
+  return cpu
 load _ _ _ = undefined
 
-executeInstruction :: forall a m k. Monad m => Instruction k -> CPU a m -> m (CPU a m)
+executeInstruction :: forall a m k. (Monad m, MArray a Word8 m) => Instruction k -> CPU a m -> m (CPU a m)
 executeInstruction (Load (o1 :: Operand k1) (o2 :: Operand k2)) cpu = load o1 o2 cpu
 executeInstruction _ _ = undefined
 {- TODO: implement each of these
@@ -138,8 +162,8 @@ executeInstruction ins@Stop = stopIns ins where
 -}
 
 -- TODO: actually load a cart
-run :: IO ()
+run :: forall m a. (Monad m, MArray a Word8 m) => m ()
 run = do
-  cpu <- initCPU @_ @IOArray
+  cpu <- initCPU @m @a
   _ <- executeInstruction Halt cpu
   return ()

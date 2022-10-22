@@ -36,7 +36,7 @@ initCPU = do
     flags = emptyFlags
   }
 
-load :: forall m k1 k2 a. (Monad m, MArray a Word8 m, LoadOperands k1 k2 ~ 'KLoad) => Operand k1 -> Operand k2 -> (CPU a m -> m (CPU a m))
+load :: (Monad m, MArray a Word8 m, LoadOperands k1 k2 ~ 'KLoad) => Operand k1 -> Operand k2 -> (CPU a m -> m (CPU a m))
 load (Reg8 r1) (Reg8 r2) cpu =
   let regs = registers cpu in
   return $ cpu { registers = setReg8 r1 (reg8 r2 regs) regs }
@@ -109,7 +109,7 @@ load (StackPointer Unchanged) (Reg16 RegH RegL) cpu =
   let regs = registers cpu in
   return $ cpu { sp = reg16 RegH RegL regs }
 
-executeInstruction :: forall a m k. (Monad m, MArray a Word8 m) => Instruction k -> CPU a m -> m (CPU a m)
+executeInstruction :: (Monad m, MArray a Word8 m) => Instruction k -> CPU a m -> m (CPU a m)
 executeInstruction (Load (o1 :: Operand k1) (o2 :: Operand k2)) cpu = load o1 o2 cpu
 executeInstruction _ _ = undefined
 {- TODO: implement each of these

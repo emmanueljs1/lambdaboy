@@ -1,14 +1,15 @@
 module Operand
   ( PostInstructionOperation (..)
-  , PostInstructionOperationKind (..)
   , StackPointerOperation (..)
   , StackPointerOperationKind (..)
+  , Offsetable
   , OperandKind (..)
   , Operand (..)
   , RstVector (..)
   , ConditionCodeKind (..)
   , ConditionCode (..)
   , Uimm3 (..)
+  , offsetFF00
   )
 where
 
@@ -19,10 +20,6 @@ import GHC.TypeLits
 
 import Registers
 
-data OffsetType = RegCOffset | Uimm8Offset
-
-data PostInstructionOperationKind = KIncrementAfter | KDecrementAfter
-
 data StackPointerOperationKind = KUnchanged | KAddInt8
 
 data OperandKind
@@ -32,22 +29,22 @@ data OperandKind
   | KUimm16
   | KReg16 RegType RegType
   | KIndirect OperandKind
-  | KFF00Offset OffsetType
+  | KFF00Offset OperandKind
   | KStackPointer StackPointerOperationKind
-  | KPostInstruction OperandKind PostInstructionOperationKind
+  | KPostInstruction OperandKind
   | KRegAF
 
-data Addressable = Addressable
+type family Addressable (ok :: OperandKind) :: Bool where
+  Addressable 'KUimm16 = 'True
+  Addressable ('KReg16 _ _) = 'True
+  Addressable ('KFF00Offset _) = 'True
+  Addressable ('KPostInstruction ('KReg16 'H 'L)) = 'True
+  Addressable _ = 'False
 
-type family Address (ok :: OperandKind) :: Addressable where
-  Address 'KUimm16 = 'Addressable
-  Address ('KReg16 _ _) = 'Addressable
-
-newtype Offsetable = Offsetable OffsetType
-
-type family Offset (ok :: OperandKind) :: Offsetable where
-  Offset 'KUimm8 = 'Offsetable 'Uimm8Offset
-  Offset ('KReg8 'C) = 'Offsetable 'RegCOffset
+type family Offsetable (ok :: OperandKind) :: Bool where
+  Offsetable 'KUimm8 = 'True
+  Offsetable ('KReg8 'C) = 'True
+  Offsetable _ = 'False
 
 data StackPointerOperation :: StackPointerOperationKind -> Type where
   Unchanged :: StackPointerOperation 'KUnchanged
@@ -55,17 +52,13 @@ data StackPointerOperation :: StackPointerOperationKind -> Type where
 
 deriving instance Show (StackPointerOperation spo)
 
-data PostInstructionOperation :: PostInstructionOperationKind -> Type where
-  IncrementAfter :: PostInstructionOperation 'KIncrementAfter
-  DecrementAfter :: PostInstructionOperation 'KDecrementAfter
+data PostInstructionOperation = IncrementAfter
+                              | DecrementAfter
+                              deriving Show
 
-deriving instance Show (PostInstructionOperation piok)
-
-data PostOperable = PostOperable
-
-type family PostOperation (ok :: OperandKind) (piok :: PostInstructionOperationKind) :: PostOperable where
-  PostOperation ('KReg16 'H 'L) 'KIncrementAfter = 'PostOperable
-  PostOperation ('KReg16 'H 'L) 'KDecrementAfter = 'PostOperable
+type family PostOperable (ok :: OperandKind) :: Bool where
+  PostOperable ('KReg16 'H 'L) = 'True
+  PostOperable _ = 'False
 
 data Operand :: OperandKind -> Type where
   Uimm8 :: Word8 -> Operand 'KUimm8
@@ -73,13 +66,17 @@ data Operand :: OperandKind -> Type where
   Reg8 :: Reg r -> Operand ('KReg8 r)
   Uimm16 :: Word16 -> Operand 'KUimm16
   Reg16 :: CombinedRegs r1 r2 ~ 'RegsCompatible => Reg r1 -> Reg r2 -> Operand ('KReg16 r1 r2)
-  Indirect :: Address ok ~ 'Addressable => Operand ok -> Operand ('KIndirect ok)
-  FF00Offset :: Offset ok ~ 'Offsetable ot => Operand ok -> Operand ('KFF00Offset ot)
+  Indirect :: Addressable ok ~ 'True => Operand ok -> Operand ('KIndirect ok)
+  FF00Offset :: Offsetable ok ~ 'True => Operand ok -> Operand ('KFF00Offset ok)
   StackPointer :: StackPointerOperation k -> Operand ('KStackPointer k)
-  PostInstruction :: PostOperation ok piok ~ 'PostOperable => Operand ok -> PostInstructionOperation piok -> Operand ('KPostInstruction ok piok)
+  PostInstruction :: PostOperable ok ~ 'True => Operand ok -> PostInstructionOperation -> Operand ('KPostInstruction ok)
   RegAF :: Operand 'KRegAF
 
 deriving instance Show (Operand ok)
+
+offsetFF00 :: Offsetable ok ~ 'True => Operand ok -> Registers -> Word16
+offsetFF00 (Uimm8 n8) _ = 0xFF00 + fromIntegral n8
+offsetFF00 (Reg8 RegC) regs = 0xFF00 + fromIntegral (reg8 RegC regs)
 
 type Only3Bits (n :: Nat) = (KnownNat n, 0 <= n, n <= 7)
 

@@ -66,17 +66,17 @@ type family LoadOperands (k1 :: OperandKind) (k2 :: OperandKind) :: InstructionK
   -- LD (n16), A
   LoadOperands ('KIndirect 'KUimm16) ('KReg8 'A) = 'KLoad
   -- LD ($FF00 + n8), A | LD ($FF00 + C), A
-  LoadOperands ('KFF00Offset _) ('KReg8 'A) = 'KLoad
+  LoadOperands ('KIndirect ('KFF00Offset _)) ('KReg8 'A) = 'KLoad
   -- LD A, (r16)
   LoadOperands ('KReg8 'A) ('KIndirect ('KReg16 _ _)) = 'KLoad
   -- LD A, (n16)
   LoadOperands ('KReg8 'A) ('KIndirect 'KUimm16) = 'KLoad
   -- LD A, ($FF00 + n8) | LD A, ($FF00 + C)
-  LoadOperands ('KReg8 'A) ('KFF00Offset _) = 'KLoad
+  LoadOperands ('KReg8 'A) ('KIndirect ('KFF00Offset _)) = 'KLoad
   -- LD (HLI), A | LD (HLD), A
-  LoadOperands ('KIndirect ('KPostInstruction ('KReg16 'H 'L) _)) ('KReg8 'A) = 'KLoad
+  LoadOperands ('KIndirect ('KPostInstruction ('KReg16 'H 'L))) ('KReg8 'A) = 'KLoad
   -- LD A, (HLI) | LD A, (HLD)
-  LoadOperands ('KReg8 'A) ('KIndirect ('KPostInstruction ('KReg16 'H 'L) _)) = 'KLoad
+  LoadOperands ('KReg8 'A) ('KIndirect ('KPostInstruction ('KReg16 'H 'L))) = 'KLoad
   -- LD SP, n16
   LoadOperands ('KStackPointer 'KUnchanged) 'KUimm16 = 'KLoad
   -- LD (n16), SP

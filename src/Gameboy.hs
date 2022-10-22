@@ -58,6 +58,24 @@ load (Indirect (Uimm16 n16)) (Reg8 RegA) cpu = do
   let regs = registers cpu
   _ <- writeArray (ram cpu) n16 (reg8 RegA regs)
   return cpu
+load (Indirect (FF00Offset op)) (Reg8 RegA) cpu = do
+  let regs = registers cpu
+  _ <- writeArray (ram cpu) (offsetFF00 op regs) (reg8 RegA regs)
+  return cpu
+load (Reg8 RegA) (Indirect (Reg16 r1 r2)) cpu = do
+  let regs = registers cpu
+  n8 <- readArray (ram cpu) (reg16 r1 r2 regs)
+  return $ cpu { registers = setReg8 RegA n8 regs }
+load (Reg8 RegA) (Indirect (Uimm16 n16)) cpu = do
+  let regs = registers cpu
+  n8 <- readArray (ram cpu) n16
+  return $ cpu { registers = setReg8 RegA n8 regs }
+load (Reg8 RegA) (Indirect (FF00Offset op)) cpu = do
+  let regs = registers cpu
+  n8 <- readArray (ram cpu) (offsetFF00 op regs)
+  return $ cpu { registers = setReg8 RegA n8 regs }
+load (Indirect (PostInstruction (Reg16 RegH RegL) operation)) (Reg8 RegA) cpu = undefined
+load (Reg8 RegA) (Indirect (PostInstruction (Reg16 RegH RegL) operation)) cpu = undefined
 load _ _ _ = undefined
 
 executeInstruction :: forall a m k. (Monad m, MArray a Word8 m) => Instruction k -> CPU a m -> m (CPU a m)

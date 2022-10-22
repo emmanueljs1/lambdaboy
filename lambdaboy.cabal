@@ -45,6 +45,7 @@ library
       ScopedTypeVariables
       FlexibleContexts
       AllowAmbiguousTypes
+      FlexibleInstances
   build-depends:
       base >=4.7 && <5
     , array

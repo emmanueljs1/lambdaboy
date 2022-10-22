@@ -1,5 +1,7 @@
 module Operand
   ( PostInstructionOperation (..)
+  , PostOperableValidity (..)
+  , PostOperable
   , StackPointerOperation (..)
   , StackPointerOperationKind (..)
   , Offsetable
@@ -34,17 +36,21 @@ data OperandKind
   | KPostInstruction OperandKind
   | KRegAF
 
-type family Addressable (ok :: OperandKind) :: Bool where
-  Addressable 'KUimm16 = 'True
-  Addressable ('KReg16 _ _) = 'True
-  Addressable ('KFF00Offset _) = 'True
-  Addressable ('KPostInstruction ('KReg16 'H 'L)) = 'True
-  Addressable _ = 'False
+data AddressValidity = ValidAddress | InvalidAddress
 
-type family Offsetable (ok :: OperandKind) :: Bool where
-  Offsetable 'KUimm8 = 'True
-  Offsetable ('KReg8 'C) = 'True
-  Offsetable _ = 'False
+type family Addressable (ok :: OperandKind) :: AddressValidity where
+  Addressable 'KUimm16 = 'ValidAddress
+  Addressable ('KReg16 _ _) = 'ValidAddress
+  Addressable ('KFF00Offset _) = 'ValidAddress
+  Addressable ('KPostInstruction ('KReg16 'H 'L)) = 'ValidAddress
+  Addressable _ = 'InvalidAddress
+
+data OffsetValidity = ValidOffset | InvalidOffset
+
+type family Offsetable (ok :: OperandKind) :: OffsetValidity where
+  Offsetable 'KUimm8 = 'ValidOffset
+  Offsetable ('KReg8 'C) = 'ValidOffset
+  Offsetable _ = 'InvalidOffset
 
 data StackPointerOperation :: StackPointerOperationKind -> Type where
   Unchanged :: StackPointerOperation 'KUnchanged
@@ -56,9 +62,11 @@ data PostInstructionOperation = IncrementAfter
                               | DecrementAfter
                               deriving Show
 
-type family PostOperable (ok :: OperandKind) :: Bool where
-  PostOperable ('KReg16 'H 'L) = 'True
-  PostOperable _ = 'False
+data PostOperableValidity = ValidPostOperable | InvalidPostOperable
+
+type family PostOperable (ok :: OperandKind) :: PostOperableValidity where
+  PostOperable ('KReg16 'H 'L) = 'ValidPostOperable
+  PostOperable _ = 'InvalidPostOperable
 
 data Operand :: OperandKind -> Type where
   Uimm8 :: Word8 -> Operand 'KUimm8
@@ -66,15 +74,15 @@ data Operand :: OperandKind -> Type where
   Reg8 :: Reg r -> Operand ('KReg8 r)
   Uimm16 :: Word16 -> Operand 'KUimm16
   Reg16 :: CombinedRegs r1 r2 ~ 'RegsCompatible => Reg r1 -> Reg r2 -> Operand ('KReg16 r1 r2)
-  Indirect :: Addressable ok ~ 'True => Operand ok -> Operand ('KIndirect ok)
-  FF00Offset :: Offsetable ok ~ 'True => Operand ok -> Operand ('KFF00Offset ok)
+  Indirect :: Addressable ok ~ 'ValidAddress => Operand ok -> Operand ('KIndirect ok)
+  FF00Offset :: Offsetable ok ~ 'ValidOffset => Operand ok -> Operand ('KFF00Offset ok)
   StackPointer :: StackPointerOperation k -> Operand ('KStackPointer k)
-  PostInstruction :: PostOperable ok ~ 'True => Operand ok -> PostInstructionOperation -> Operand ('KPostInstruction ok)
+  PostInstruction :: PostOperable ok ~ 'ValidPostOperable => Operand ok -> PostInstructionOperation -> Operand ('KPostInstruction ok)
   RegAF :: Operand 'KRegAF
 
 deriving instance Show (Operand ok)
 
-offsetFF00 :: Offsetable ok ~ 'True => Operand ok -> Registers -> Word16
+offsetFF00 :: Offsetable ok ~ 'ValidOffset => Operand ok -> Registers -> Word16
 offsetFF00 (Uimm8 n8) _ = 0xFF00 + fromIntegral n8
 offsetFF00 (Reg8 RegC) regs = 0xFF00 + fromIntegral (reg8 RegC regs)
 

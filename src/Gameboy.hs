@@ -109,13 +109,6 @@ load (StackPointer Unchanged) (Reg16 RegH RegL) cpu =
   let regs = registers cpu in
   return $ cpu { sp = reg16 RegH RegL regs }
 
-postInstruction :: PostOperable ok ~ 'ValidPostOperable => Operand ('KPostInstruction ok) -> Registers -> Registers
-postInstruction (PostInstruction (Reg16 RegH RegL) operation) regs =
-  let opFun = case operation of
-               IncrementAfter -> (+1)
-               DecrementAfter -> (\n -> n - 1)
-  in setReg16 RegH RegL (opFun (reg16 RegH RegL regs)) regs
-
 executeInstruction :: forall a m k. (Monad m, MArray a Word8 m) => Instruction k -> CPU a m -> m (CPU a m)
 executeInstruction (Load (o1 :: Operand k1) (o2 :: Operand k2)) cpu = load o1 o2 cpu
 executeInstruction _ _ = undefined

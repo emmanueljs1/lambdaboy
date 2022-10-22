@@ -12,6 +12,7 @@ module Operand
   , ConditionCode (..)
   , Uimm3 (..)
   , offsetFF00
+  , postInstruction
   )
 where
 
@@ -85,6 +86,13 @@ deriving instance Show (Operand ok)
 offsetFF00 :: Offsetable ok ~ 'ValidOffset => Operand ok -> Registers -> Word16
 offsetFF00 (Uimm8 n8) _ = 0xFF00 + fromIntegral n8
 offsetFF00 (Reg8 RegC) regs = 0xFF00 + fromIntegral (reg8 RegC regs)
+
+postInstruction :: PostOperable ok ~ 'ValidPostOperable => Operand ('KPostInstruction ok) -> Registers -> Registers
+postInstruction (PostInstruction (Reg16 RegH RegL) operation) regs =
+  let opFun = case operation of
+               IncrementAfter -> (+1)
+               DecrementAfter -> (\n -> n - 1)
+  in setReg16 RegH RegL (opFun (reg16 RegH RegL regs)) regs
 
 type Only3Bits (n :: Nat) = (KnownNat n, 0 <= n, n <= 7)
 

@@ -3,6 +3,7 @@ module Gameboy
     )
 where
 
+import Control.Monad.State.Lazy
 import Data.Array.MArray
 import Data.Bits
 import Data.Word
@@ -25,7 +26,7 @@ data CPU a m where
     flags :: Flags
   } -> CPU a m
 
-initCPU :: (Monad m, MArray a Word8 m) => m (CPU a m)
+initCPU :: MArray a Word8 m => m (CPU a m)
 initCPU = do
   arr <- newArray_ (0x0000, 0xFFFF)
   return $ CPU {
@@ -36,7 +37,7 @@ initCPU = do
     flags = emptyFlags
   }
 
-load :: (Monad m, MArray a Word8 m, LoadOperands k1 k2 ~ 'KLoad) => Operand k1 -> Operand k2 -> (CPU a m -> m (CPU a m))
+load :: (MArray a Word8 m, LoadOperands k1 k2 ~ 'KLoad) => Operand k1 -> Operand k2 -> (CPU a m -> m (CPU a m))
 load (Reg8 r1) (Reg8 r2) cpu =
   let regs = registers cpu in
   return $ cpu { registers = setReg8 r1 (reg8 r2 regs) regs }
@@ -109,8 +110,14 @@ load (StackPointer Unchanged) (Reg16 RegH RegL) cpu =
   let regs = registers cpu in
   return $ cpu { sp = reg16 RegH RegL regs }
 
-executeInstruction :: (Monad m, MArray a Word8 m) => Instruction k -> CPU a m -> m (CPU a m)
-executeInstruction (Load (o1 :: Operand k1) (o2 :: Operand k2)) cpu = load o1 o2 cpu
+fetchInstruction :: Monad m => CPU a m -> m Ins
+fetchInstruction CPU { pc = 0 } = return $ Ins Nop
+fetchInstruction _ = return $ Ins Halt
+
+executeInstruction :: (MonadPlus m, MArray a Word8 m) => Instruction k -> CPU a m -> m (CPU a m)
+executeInstruction (Load o1 o2) cpu = load o1 o2 cpu
+executeInstruction Halt _ = mzero -- TODO: less hacky way to terminate on HALT?
+executeInstruction Nop cpu = return cpu
 executeInstruction _ _ = undefined
 {- TODO: implement each of these
 executeInstruction ins@Add {} = addIns ins where
@@ -196,9 +203,6 @@ executeInstruction ins@DecimalAdjustAcc = daaIns ins where
 executeInstruction ins@ToggleInterrupts {} = toggleInterruptsIns ins where
   toggleInterruptsIns :: Instruction 'KToggleInterrupts -> IO ()
   toggleInterruptsIns _ = undefined
-executeInstruction ins@Halt = haltIns ins where
-  haltIns :: Instruction 'KHalt -> IO ()
-  haltIns _ = undefined
 executeInstruction ins@Nop = nopIns ins where
   nopIns :: Instruction 'KNop -> IO ()
   nopIns _ = undefined
@@ -211,8 +215,15 @@ executeInstruction ins@Stop = stopIns ins where
 -}
 
 -- TODO: actually load a cart
-run :: forall m a. (Monad m, MArray a Word8 m) => m ()
-run = do
-  cpu <- initCPU @m @a
-  _ <- executeInstruction Halt cpu
+_run :: forall a m. (MonadPlus m, MArray a Word8 m) => StateT (CPU a m) m ()
+_run = forever $ do
+  cpu <- get
+  Ins instruction <- lift $ fetchInstruction cpu
+  cpu' <- lift $ executeInstruction instruction cpu
+  put $ cpu' { pc = pc cpu' + 1 } -- TODO: do correctly
   return ()
+
+run :: forall a m. (MonadPlus m, MArray a Word8 m) => m ()
+run = do
+  cpu <- initCPU @a
+  evalStateT _run cpu

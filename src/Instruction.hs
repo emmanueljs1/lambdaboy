@@ -2,6 +2,7 @@ module Instruction
   ( LoadOperands
   , InstructionKind (..)
   , Instruction (..)
+  , Ins (..)
   , ArithmeticType (..)
   , RotateType (..)
   , RotateDirection (..)
@@ -237,6 +238,9 @@ data PostRetOperation :: PostRetOperationKind -> Type where
   PostRetEnableInterrupts :: PostRetOperation 'KPostRetEnableInterrupts
 
 deriving instance Show (PostRetOperation prok)
+
+data Ins where
+  Ins :: Instruction k -> Ins
 
 data Instruction :: InstructionKind -> Type where
   Load :: LoadOperands k1 k2 ~ 'KLoad => Operand k1 -> Operand k2 -> Instruction 'KLoad

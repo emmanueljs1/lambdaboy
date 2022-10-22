@@ -5,4 +5,4 @@ import Data.Array.IO
 import Gameboy
 
 main :: IO ()
-main = run @_ @IOArray
+main = run @IOArray

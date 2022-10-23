@@ -30,6 +30,7 @@ library
       Instruction
       Operand
       Registers
+      CPU
   hs-source-dirs:
       src
   default-extensions:

@@ -110,9 +110,9 @@ load (StackPointer Unchanged) (Reg16 RegH RegL) cpu =
   let regs = registers cpu in
   return $ cpu { sp = reg16 RegH RegL regs }
 
+-- TODO: implement
 fetchInstruction :: Monad m => CPU a m -> m Ins
-fetchInstruction CPU { pc = 0 } = return $ Ins Nop
-fetchInstruction _ = return $ Ins Halt
+fetchInstruction _ = undefined
 
 executeInstruction :: MArray a Word8 m => Instruction k -> CPU a m -> m (CPU a m)
 executeInstruction (Load o1 o2) cpu = load o1 o2 cpu

@@ -18,24 +18,24 @@ emptyFlags :: Flags
 emptyFlags = Flags False False False False
 
 data CPU a m where
-  CPU :: MArray a Word8 m => {
-    pc :: Word16,
-    sp :: Word16,
-    ram :: a Word16 Word8,
-    registers :: Registers,
-    flags :: Flags
-  } -> CPU a m
+  CPU :: MArray a Word8 m => { pc :: Word16
+                             , sp :: Word16
+                             , ram :: a Word16 Word8
+                             , registers :: Registers
+                             , flags :: Flags
+                             , running :: Bool
+                             } -> CPU a m
 
 initCPU :: MArray a Word8 m => m (CPU a m)
 initCPU = do
   arr <- newArray_ (0x0000, 0xFFFF)
-  return $ CPU {
-    pc = 0,
-    sp = 0,
-    ram = arr,
-    registers = emptyRegisters,
-    flags = emptyFlags
-  }
+  return $ CPU { pc = 0
+               , sp = 0
+               , ram = arr
+               , registers = emptyRegisters
+               , flags = emptyFlags
+               , running = True
+               }
 
 load :: (MArray a Word8 m, LoadOperands k1 k2 ~ 'KLoad) => Operand k1 -> Operand k2 -> (CPU a m -> m (CPU a m))
 load (Reg8 r1) (Reg8 r2) cpu =
@@ -114,9 +114,9 @@ fetchInstruction :: Monad m => CPU a m -> m Ins
 fetchInstruction CPU { pc = 0 } = return $ Ins Nop
 fetchInstruction _ = return $ Ins Halt
 
-executeInstruction :: (MonadPlus m, MArray a Word8 m) => Instruction k -> CPU a m -> m (CPU a m)
+executeInstruction :: MArray a Word8 m => Instruction k -> CPU a m -> m (CPU a m)
 executeInstruction (Load o1 o2) cpu = load o1 o2 cpu
-executeInstruction Halt _ = mzero -- TODO: less hacky way to terminate on HALT?
+executeInstruction Halt cpu = return $ cpu { running = False }
 executeInstruction Nop cpu = return cpu
 executeInstruction _ _ = undefined
 {- TODO: implement each of these
@@ -214,16 +214,22 @@ executeInstruction ins@Stop = stopIns ins where
   stopIns _ = undefined
 -}
 
--- TODO: actually load a cart
-_run :: forall a m. (MonadPlus m, MArray a Word8 m) => StateT (CPU a m) m ()
-_run = forever $ do
+step :: MArray a Word8 m => StateT (CPU a m) m (CPU a m)
+step = do
   cpu <- get
   Ins instruction <- lift $ fetchInstruction cpu
   cpu' <- lift $ executeInstruction instruction cpu
-  put $ cpu' { pc = pc cpu' + 1 } -- TODO: do correctly
-  return ()
+  put $ cpu' { pc = pc cpu' + 1 } -- TODO: update PC correctly
+  return cpu'
 
-run :: forall a m. (MonadPlus m, MArray a Word8 m) => m ()
+_run :: MArray a Word8 m => StateT (CPU a m) m (CPU a m)
+_run = do
+  cpu <- step
+  if running cpu then _run else return cpu
+
+-- TODO: actually load a cart
+run :: forall a m. MArray a Word8 m => m ()
 run = do
   cpu <- initCPU @a
-  evalStateT _run cpu
+  _ <- evalStateT _run cpu -- TODO: check final state
+  return ()

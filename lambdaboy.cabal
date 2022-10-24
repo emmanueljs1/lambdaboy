@@ -26,7 +26,6 @@ source-repository head
 library
   exposed-modules:
       Gameboy
-  other-modules:
       Instruction
       Operand
       Registers
@@ -72,11 +71,14 @@ test-suite lambdaboy-test
   type: exitcode-stdio-1.0
   main-is: Spec.hs
   other-modules:
+      CPUTests
       Paths_lambdaboy
   hs-source-dirs:
       test
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       base >=4.7 && <5
+    , array
+    , HUnit
     , lambdaboy
   default-language: Haskell2010

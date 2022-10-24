@@ -1,7 +1,11 @@
 module CPU
   ( CPU (..)
+  , Flags (..)
   , initCPU
   , step
+  , fetchInstruction
+  , executeInstruction
+  , load
   )
 where
 

@@ -1,7 +1,9 @@
 module CPU
   ( CPU (..)
   , Flags (..)
+  , ResultCPU (..)
   , initCPU
+  , toResultCPU
   , step
   , fetchInstruction
   , executeInstruction
@@ -9,6 +11,7 @@ module CPU
   )
 where
 
+import Data.Array
 import Data.Array.MArray
 import Data.Bits
 import Data.Word
@@ -41,6 +44,25 @@ initCPU = do
                , flags = emptyFlags
                , running = True
                }
+
+data ResultCPU =  ResultCPU { resultPC :: Word16
+                            , resultSP :: Word16
+                            , resultRAM :: Array Word16 Word8
+                            , resultRegisters :: Registers
+                            , resultFlags :: Flags
+                            , resultRunning :: Bool
+                            }
+
+toResultCPU :: MArray a Word8 m => CPU a m -> m ResultCPU
+toResultCPU cpu = do
+  frozenRAM <- freeze $ ram cpu
+  return $ ResultCPU { resultPC = pc cpu
+                     , resultSP = sp cpu
+                     , resultRAM = frozenRAM
+                     , resultRegisters = registers cpu
+                     , resultFlags = flags cpu
+                     , resultRunning = running cpu
+                     }
 
 step :: MArray a Word8 m => CPU a m -> m (CPU a m)
 step cpu = do

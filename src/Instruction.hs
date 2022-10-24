@@ -1,5 +1,6 @@
 module Instruction
   ( LoadOperands
+  , AddOperands
   , InstructionKind (..)
   , Instruction (..)
   , Ins (..)
@@ -101,8 +102,8 @@ type family AddOperands (atk :: ArithmeticTypeKind) (k1 :: OperandKind) (k2 :: O
   AddOperands _ ('KReg8 'A) ('KReg8 _) = 'KAdd
   AddOperands _ ('KReg8 'A) ('KIndirect ('KReg16 'H 'L)) = 'KAdd
   AddOperands _ ('KReg8 'A) 'KUimm8 = 'KAdd
-  AddOperands 'KWithoutCarryIncluded ('KReg16 'H 'L) ('KStackPointer 'KUnchanged) = 'KAdd
-  AddOperands 'KWithoutCarryIncluded ('KStackPointer 'KUnchanged) 'KImm8 = 'KAdd
+  AddOperands 'KWithCarryIncluded ('KReg16 'H 'L) ('KStackPointer 'KUnchanged) = 'KAdd
+  AddOperands 'KWithCarryIncluded ('KStackPointer 'KUnchanged) 'KImm8 = 'KAdd
   AddOperands _ _ _ = 'KInvalid
 
 type family AndOperands (k1 :: OperandKind) (k2 :: OperandKind) :: InstructionKind where

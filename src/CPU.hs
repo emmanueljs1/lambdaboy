@@ -25,6 +25,14 @@ data Flags = Flags { flagZ :: Bool, flagN :: Bool, flagH :: Bool, flagC :: Bool 
 emptyFlags :: Flags
 emptyFlags = Flags { flagZ = True, flagN = True, flagH = True, flagC = True }
 
+flagsFromInt8 :: Int -> Flags
+flagsFromInt8 i =
+  let h = i > 0xF in
+  let z = i == 0 in
+  let c = i > 0xFF in
+  emptyFlags { flagH = h, flagZ = z, flagC = c }
+
+
 data CPU a m where
   CPU :: MArray a Word8 m => { pc :: Word16
                              , sp :: Word16
@@ -71,7 +79,7 @@ step cpu = do
   return $ cpu' { pc = pc cpu + 1 } -- TODO: update PC correctly
 
 
-load :: (MArray a Word8 m, LoadOperands k1 k2 ~ 'KLoad) => Operand k1 -> Operand k2 -> (CPU a m -> m (CPU a m))
+load :: (MArray a Word8 m, LoadOperands k1 k2 ~ 'KLoad) => Operand k1 -> Operand k2 -> CPU a m -> m (CPU a m)
 load (Reg8 r1) (Reg8 r2) cpu =
   let regs = registers cpu in
   return $ cpu { registers = setReg8 r1 (reg8 r2 regs) regs }
@@ -132,17 +140,33 @@ load (Indirect (Uimm16 n16)) (StackPointer Unchanged) cpu = do
   _ <- writeArray (ram cpu) (n16 + 1) (fromIntegral $ shiftR (sp cpu) 8)
   return cpu
 load (Reg16 RegH RegL) (StackPointer (AddInt8 e8)) cpu =
-  let intSP :: Int = fromIntegral $ sp cpu in
-  let intE8 :: Int = fromIntegral e8 in
-  let h = (intSP .&. 0xF) + (intE8 .&. 0xF) > 0xF in
-  let c = intSP + intE8 > 0xFF in
   let offset = fromIntegral $ if e8 < 0 then -1 * e8 else e8 in
+  let flags' = flagsFromInt8 (fromIntegral e8 + fromIntegral (sp cpu)) in
   let sp' = sp cpu + offset in
-  let flags' = Flags { flagZ = False, flagN = False, flagH = h, flagC = c } in
-  return $ cpu { sp = sp', flags = flags' }
+  return $ cpu { sp = sp', flags = flags' { flagZ = False } }
 load (StackPointer Unchanged) (Reg16 RegH RegL) cpu =
   let regs = registers cpu in
   return $ cpu { sp = reg16 RegH RegL regs }
+
+
+add :: forall a m atk k1 k2. (MArray a Word8 m, AddOperands atk k1 k2 ~ 'KAdd) => ArithmeticType atk -> Operand k1 -> Operand k2 -> CPU a m -> m (CPU a m)
+add at (Reg8 RegA) op cpu = do
+  let aVal = reg8 RegA regs
+  opVal <- evalOp op
+  let added = fromIntegral aVal + fromIntegral opVal
+  let flags' = flagsFromInt8 added
+  let carryVal = case at of
+                   WithCarryIncluded -> if flagC flags' then 1 else 0
+                   WithoutCarryIncluded -> 0
+  return $ cpu { registers = setReg8 RegA (aVal + opVal + carryVal) regs }
+  where
+    regs = registers cpu
+    evalOp :: AddOperands atk ('KReg8 'A) k2 ~ 'KAdd => Operand k2 -> m Word8
+    evalOp (Reg8 r) = return $ reg8 r regs
+    evalOp (Indirect (Reg16 RegH RegL)) = readArray (ram cpu) (reg16 RegH RegL regs)
+    evalOp (Uimm8 n8) = return n8
+add WithCarryIncluded (Reg16 RegH RegL) (StackPointer Unchanged) cpu = undefined 
+add WithCarryIncluded (StackPointer Unchanged) (Imm8 e8) cpu = undefined
 
 -- TODO: implement
 fetchInstruction :: Monad m => CPU a m -> m Ins
@@ -150,6 +174,7 @@ fetchInstruction _ = undefined
 
 executeInstruction :: MArray a Word8 m => Instruction k -> CPU a m -> m (CPU a m)
 executeInstruction (Load o1 o2) cpu = load o1 o2 cpu
+executeInstruction (Add at o1 o2) cpu = add at o1 o2 cpu
 executeInstruction Halt cpu = return $ cpu { running = False }
 executeInstruction Nop cpu = return cpu
 executeInstruction _ _ = undefined

@@ -31,7 +31,7 @@ loadR8R8 =
 loadIndirectR16R8 :: Test
 loadIndirectR16R8 =
   let arr = runSTArray $ do
-        let regs = setReg8 RegH 0x1 $ setReg8 RegL 0x2 (setReg8 RegA 0xF emptyRegisters)
+        let regs = setReg16 RegH RegL 0x12 (setReg8 RegA 0xF emptyRegisters)
         cpu <- withRegisters regs emptyCPU
         cpu' <- load (Indirect (Reg16 RegH RegL)) (Reg8 RegA) cpu
         return $ ram cpu'

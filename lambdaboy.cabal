@@ -75,6 +75,20 @@ test-suite lambdaboy-test
       Paths_lambdaboy
   hs-source-dirs:
       test
+  default-extensions:
+      GADTs
+      DataKinds
+      TypeFamilies
+      StandaloneDeriving
+      ConstraintKinds
+      TypeOperators
+      RankNTypes
+      PolyKinds
+      TypeApplications
+      ScopedTypeVariables
+      FlexibleContexts
+      AllowAmbiguousTypes
+      FlexibleInstances
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       base >=4.7 && <5

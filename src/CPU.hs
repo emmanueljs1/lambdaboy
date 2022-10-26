@@ -29,7 +29,7 @@ emptyFlags = Flags { flagZ = True, flagN = True, flagH = True, flagC = True }
 flagsFromInt8 :: Int -> Flags
 flagsFromInt8 i =
   let h = i > 0xF in
-  let z = i == 0 in
+  let z = i `mod` 256 == 0 in
   let c = i > 0xFF in
   emptyFlags { flagH = h, flagZ = z, flagC = c }
 
@@ -159,7 +159,7 @@ add at (Reg8 RegA) op cpu = do
   let carryVal = case at of
                    WithCarryIncluded -> if flagC flags' then 1 else 0
                    WithoutCarryIncluded -> 0
-  return $ cpu { registers = setReg8 RegA (aVal + opVal + carryVal) regs }
+  return $ cpu { registers = setReg8 RegA (aVal + opVal + carryVal) regs, flags = flags'}
   where
     regs = registers cpu
     evalOp :: AddOperands atk ('KReg8 'A) k2 ~ 'KAdd => Operand k2 -> m Word8

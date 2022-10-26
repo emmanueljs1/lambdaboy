@@ -231,19 +231,50 @@ loadTests = "LD tests" ~: TestList [ loadR8R8
                                    , loadSPHL
                                    ]
 
+add8Expected :: ArithmeticType atk -> ResultCPU -> Test
+add8Expected at resultCPU = TestList [ "register update" ~: reg8 RegA (resultRegisters resultCPU) ~?= 0x00 + carry at
+                                     , "c flag" ~: flagC (resultFlags resultCPU) ~?= True
+                                     , "h flag" ~: flagH (resultFlags resultCPU) ~?= True
+                                     , "z flag" ~: flagZ (resultFlags resultCPU) ~?= True
+                                     ] where
+  carry :: ArithmeticType atk -> Word8
+  carry WithCarryIncluded = 0x1
+  carry WithoutCarryIncluded = 0x0
+
 addRAR8 :: Test
-addRAR8 = "ADD A, r8" ~: [ "register update" ~: reg8 RegA (resultRegisters resultCPU) ~?= 0xFF
-                         , "c flag" ~: flagC (resultFlags resultCPU) ~?= True
-                         , "h flag" ~: flagH (resultFlags resultCPU) ~?= True
-                         ] where
-  resultCPU = runST $ do
-    let regs = setReg8 RegA 0xFE (setReg8 RegB 0x01 emptyRegisters)
+addRAR8 = TestList [ "ADD A, r8" ~: add8Expected WithoutCarryIncluded (resultCPU WithoutCarryIncluded)
+                   , "ADC A, r8" ~: add8Expected WithCarryIncluded (resultCPU WithCarryIncluded)
+                   ] where
+  resultCPU at = runST $ do
+    let regs = setReg8 RegA 0xFF (setReg8 RegB 0x01 emptyRegisters)
     cpu <- withRegisters regs emptyCPU
-    cpu' <- add WithoutCarryIncluded (Reg8 RegA) (Reg8 RegB) cpu
+    cpu' <- add at (Reg8 RegA) (Reg8 RegB) cpu
+    toResultCPU cpu'
+
+addRAIndirectHL :: Test
+addRAIndirectHL = TestList [ "ADD A, (HL)" ~: add8Expected WithoutCarryIncluded (resultCPU WithoutCarryIncluded)
+                           , "ADC A, (HL)" ~: add8Expected WithCarryIncluded (resultCPU WithCarryIncluded)
+                           ] where
+  resultCPU at = runST $ do
+    let regs = setReg8 RegA 0xFF (setReg16 RegH RegL 0x1111 emptyRegisters)
+    cpu <- withRegisters regs emptyCPU
+    writeArray (ram cpu) 0x1111 0x1
+    cpu' <- add at (Reg8 RegA) (Indirect (Reg16 RegH RegL)) cpu
+    toResultCPU cpu'
+
+addRAN8 :: Test
+addRAN8 = TestList [ "ADD A, n8" ~: add8Expected WithoutCarryIncluded (resultCPU WithoutCarryIncluded)
+                   , "ADC A, n8" ~: add8Expected WithCarryIncluded (resultCPU WithCarryIncluded)
+                   ] where
+  resultCPU at = runST $ do
+    cpu <- withRegisters (setReg8 RegA 0xFF emptyRegisters) emptyCPU
+    cpu' <- add at (Reg8 RegA) (Uimm8 0x1) cpu
     toResultCPU cpu'
 
 addTests :: Test
 addTests = "ADD / ADC tests" ~: TestList [ addRAR8
+                                         , addRAIndirectHL
+                                         , addRAN8
                                          ]
 
 cpuTests :: Test

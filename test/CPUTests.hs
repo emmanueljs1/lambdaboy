@@ -10,6 +10,7 @@ import Data.Word
 import Test.HUnit
 
 import CPU
+import Instruction
 import Operand
 import Registers
 
@@ -230,5 +231,22 @@ loadTests = "LD tests" ~: TestList [ loadR8R8
                                    , loadSPHL
                                    ]
 
+addRAR8 :: Test
+addRAR8 = "ADD A, r8" ~: [ "register update" ~: reg8 RegA (resultRegisters resultCPU) ~?= 0xFF
+                         , "c flag" ~: flagC (resultFlags resultCPU) ~?= True
+                         , "h flag" ~: flagH (resultFlags resultCPU) ~?= True
+                         ] where
+  resultCPU = runST $ do
+    let regs = setReg8 RegA 0xFE (setReg8 RegB 0x01 emptyRegisters)
+    cpu <- withRegisters regs emptyCPU
+    cpu' <- add WithoutCarryIncluded (Reg8 RegA) (Reg8 RegB) cpu
+    toResultCPU cpu'
+
+addTests :: Test
+addTests = "ADD / ADC tests" ~: TestList [ addRAR8
+                                         ]
+
 cpuTests :: Test
-cpuTests = TestList [loadTests]
+cpuTests = "cpuTests" ~: TestList [loadTests
+                                  , addTests
+                                  ]

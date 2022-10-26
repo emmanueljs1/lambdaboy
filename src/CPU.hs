@@ -8,6 +8,7 @@ module CPU
   , fetchInstruction
   , executeInstruction
   , load
+  , add
   )
 where
 

@@ -271,10 +271,50 @@ addRAN8 = TestList [ "ADD A, n8" ~: add8Expected WithoutCarryIncluded (resultCPU
     cpu' <- add at (Reg8 RegA) (Uimm8 0x1) cpu
     toResultCPU cpu'
 
+addHLR16 :: Test
+addHLR16 = "ADD HL, r16" ~: TestList [ "registers updated" ~: reg16 RegH RegL (resultRegisters resultCPU) ~?= 0x0000
+                                    , "c flag" ~: flagC (resultFlags resultCPU) ~?= True
+                                    , "h flag" ~: flagH (resultFlags resultCPU) ~?= True
+                                    , "z flag" ~: flagZ (resultFlags resultCPU) ~?= False
+                                    , "n flag" ~: flagN (resultFlags resultCPU) ~?= False
+                                    ] where
+  resultCPU = runST $ do
+    let regs = setReg16 RegH RegL 0xFFFF (setReg16 RegB RegC 0x0001 emptyRegisters)
+    cpu <- withRegisters regs emptyCPU
+    cpu' <- add WithoutCarryIncluded (Reg16 RegH RegL) (Reg16 RegB RegC) cpu
+    toResultCPU cpu'
+
+addHLSP :: Test
+addHLSP = "ADD HL, r16" ~: TestList [ "registers updated" ~: reg16 RegH RegL (resultRegisters resultCPU) ~?= 0x0000
+                                    , "c flag" ~: flagC (resultFlags resultCPU) ~?= True
+                                    , "h flag" ~: flagH (resultFlags resultCPU) ~?= True
+                                    , "z flag" ~: flagZ (resultFlags resultCPU) ~?= False
+                                    , "n flag" ~: flagN (resultFlags resultCPU) ~?= False
+                                    ] where
+  resultCPU = runST $ do
+    let regs = setReg16 RegH RegL 0xFFFF emptyRegisters
+    cpu <- withSP 0x0001 $ withRegisters regs emptyCPU
+    cpu' <- add WithoutCarryIncluded (Reg16 RegH RegL) (StackPointer Unchanged) cpu
+    toResultCPU cpu'
+
+addSPE8 :: Test
+addSPE8 =
+  "ADD SP, e8" ~: TestList [ "sp update" ~: resultSP resultCPU ~?= 0x0000
+                           , "c flag" ~: flagC (resultFlags resultCPU) ~?= True
+                           , "h flag" ~: flagH (resultFlags resultCPU) ~?= True
+                           ] where
+  resultCPU = runST $ do
+    cpu <- withSP 0xFFFF emptyCPU
+    cpu' <- add WithoutCarryIncluded (StackPointer Unchanged) (Imm8 1) cpu
+    toResultCPU cpu'
+
 addTests :: Test
 addTests = "ADD / ADC tests" ~: TestList [ addRAR8
                                          , addRAIndirectHL
                                          , addRAN8
+                                         , addHLR16
+                                         , addHLSP
+                                         , addSPE8
                                          ]
 
 cpuTests :: Test

@@ -13,6 +13,7 @@ module Operand
   , Uimm3 (..)
   , offsetFF00
   , postInstruction
+  , offsetSP
   )
 where
 
@@ -93,6 +94,10 @@ postInstruction (PostInstruction (Reg16 RegH RegL) operation) regs =
                IncrementAfter -> (+1)
                DecrementAfter -> (\n -> n - 1)
   in setReg16 RegH RegL (opFun (reg16 RegH RegL regs)) regs
+
+offsetSP :: StackPointerOperation 'KAddInt8 -> Word16 -> Word16
+offsetSP (AddInt8 e8) =
+  if e8 < 0 then subtract (fromIntegral (-1 * e8)) else (+ fromIntegral e8)
 
 type Only3Bits (n :: Nat) = (KnownNat n, 0 <= n, n <= 7)
 

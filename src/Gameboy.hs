@@ -3,7 +3,6 @@ module Gameboy
     )
 where
 
-import Control.Monad.State.Lazy
 import Data.Array.MArray
 import Data.Word
 
@@ -16,22 +15,19 @@ data Gameboy a m where
 loadCart :: MArray a Word8 m => m (Gameboy a m)
 loadCart = Gameboy <$> initCPU
 
-step :: MArray a Word8 m => StateT (Gameboy a m) m (Gameboy a m)
-step = do
-  gameboy <- get
-  cpu' <- lift $ CPU.step (cpu gameboy)
-  let gameboy' = gameboy { cpu = cpu' }
-  put gameboy' -- TODO: update PC correctly
-  return gameboy'
+step :: MArray a Word8 m => Gameboy a m -> m (Gameboy a m)
+step gameboy = do
+  cpu' <- CPU.step (cpu gameboy)
+  return $ gameboy { cpu = cpu' }
 
-_run :: MArray a Word8 m => StateT (Gameboy a m) m (Gameboy a m)
-_run = do
-  gameboy <- step
-  if (running . cpu) gameboy then _run else return gameboy
+_run :: MArray a Word8 m => Gameboy a m -> m (Gameboy a m)
+_run gameboy = do
+  gameboy' <- step gameboy
+  if (running . cpu) gameboy' then _run gameboy' else return gameboy'
 
 -- TODO: actually load a cart
 run :: forall a m. MArray a Word8 m => m ()
 run = do
   gameboy <- loadCart @a
-  _ <- evalStateT _run gameboy -- TODO: check final state
+  _ <- _run gameboy -- TODO: check final state
   return ()

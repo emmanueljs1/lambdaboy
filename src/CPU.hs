@@ -12,6 +12,8 @@ module CPU
   )
 where
 
+import Prelude hiding (and)
+
 import Data.Array
 import Data.Array.MArray
 import Data.Bits
@@ -185,6 +187,19 @@ add WithoutCarryIncluded (StackPointer Unchanged) (Imm8 e8) cpu =
   let flags' = flagsFromInt8 (fromIntegral e8 + fromIntegral (sp cpu)) in
   return $ cpu { sp = offsetSP (AddInt8 e8) (sp cpu), flags = flags' }
 
+and :: forall a m k1 k2. (MArray a Word8 m, AndOperands k1 k2 ~ 'KAnd) => Operand k1 -> Operand k2 -> CPU a m -> m (CPU a m)
+and (Reg8 RegA) op cpu = do
+  opVal <- evalOp op
+  let z = (reg8 RegA regs .&. opVal) == 0
+  return $ cpu { flags = emptyFlags { flagZ = z, flagH = True } }
+  where
+    regs = registers cpu
+    -- TODO: generalize this to evalArithmeticOp (for add, and, sbc, sub, or, xor)
+    evalOp :: (MArray a Word8 m, AndOperands k1 k2 ~ 'KAnd) => Operand k2 -> m Word8
+    evalOp (Reg8 r) = return $ reg8 r regs
+    evalOp (Indirect (Reg16 RegH RegL)) = readArray (ram cpu) (reg16 RegH RegL regs)
+    evalOp (Uimm8 n8) = return n8
+
 -- TODO: implement
 fetchInstruction :: Monad m => CPU a m -> m Ins
 fetchInstruction _ = undefined
@@ -192,17 +207,11 @@ fetchInstruction _ = undefined
 executeInstruction :: MArray a Word8 m => Instruction k -> CPU a m -> m (CPU a m)
 executeInstruction (Load o1 o2) cpu = load o1 o2 cpu
 executeInstruction (Add at o1 o2) cpu = add at o1 o2 cpu
+executeInstruction (And o1 o2) cpu = and o1 o2 cpu
 executeInstruction Halt cpu = return $ cpu { running = False }
 executeInstruction Nop cpu = return cpu
 executeInstruction _ _ = undefined
 {- TODO: implement each of these
-executeInstruction ins@Add {} = addIns ins where
-  addIns :: Instruction 'KAdd -> IO ()
-  addIns (Add WithCarryIncluded _ _) = undefined
-  addIns (Add WithoutCarryIncluded _ _) = undefined
-executeInstruction ins@And {} = andIns ins where
-  andIns :: Instruction 'KAnd -> IO ()
-  andIns _ = undefined
 executeInstruction ins@Compare {} = compareIns ins where
   compareIns :: Instruction 'KCompare -> IO ()
   compareIns _ = undefined
@@ -279,9 +288,6 @@ executeInstruction ins@DecimalAdjustAcc = daaIns ins where
 executeInstruction ins@ToggleInterrupts {} = toggleInterruptsIns ins where
   toggleInterruptsIns :: Instruction 'KToggleInterrupts -> IO ()
   toggleInterruptsIns _ = undefined
-executeInstruction ins@Nop = nopIns ins where
-  nopIns :: Instruction 'KNop -> IO ()
-  nopIns _ = undefined
 executeInstruction ins@SetCarryFlag = scfIns ins where
   scfIns :: Instruction 'KSetCarryFlag -> IO ()
   scfIns _ = undefined

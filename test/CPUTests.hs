@@ -317,7 +317,22 @@ addTests = "ADD / ADC tests" ~: TestList [ addRAR8
                                          , addSPE8
                                          ]
 
+{- TODO: add tests for AND -}
+andTests :: Test
+andTests = "AND tests" ~: TestList []
+
+{- TODO: add test for HALT -}
+haltTests :: Test
+haltTests = "HALT tests" ~: TestList []
+
+{- TODO: add test for NOP -}
+nopTests :: Test
+nopTests = "NOP tests" ~: TestList []
+
 cpuTests :: Test
 cpuTests = "cpuTests" ~: TestList [loadTests
                                   , addTests
+                                  , andTests
+                                  , haltTests
+                                  , nopTests
                                   ]

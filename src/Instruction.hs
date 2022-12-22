@@ -1,6 +1,7 @@
 module Instruction
   ( LoadOperands
   , AddOperands
+  , AndOperands
   , InstructionKind (..)
   , Instruction (..)
   , Ins (..)

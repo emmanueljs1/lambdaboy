@@ -9,6 +9,7 @@ module CPU
   , executeInstruction
   , load
   , add
+  , and
   )
 where
 
@@ -190,8 +191,9 @@ add WithoutCarryIncluded (StackPointer Unchanged) (Imm8 e8) cpu =
 and :: forall a m k1 k2. (MArray a Word8 m, AndOperands k1 k2 ~ 'KAnd) => Operand k1 -> Operand k2 -> CPU a m -> m (CPU a m)
 and (Reg8 RegA) op cpu = do
   opVal <- evalOp op
-  let z = (reg8 RegA regs .&. opVal) == 0
-  return $ cpu { flags = emptyFlags { flagZ = z, flagH = True } }
+  let regs' = setReg8 RegA (reg8 RegA regs .&. opVal) regs
+  let z = reg8 RegA regs' == 0
+  return $ cpu { registers = regs', flags = emptyFlags { flagZ = z, flagH = True } }
   where
     regs = registers cpu
     -- TODO: generalize this to evalArithmeticOp (for add, and, sbc, sub, or, xor)

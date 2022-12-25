@@ -3,6 +3,8 @@ module CPUTests
   )
 where
 
+import Prelude hiding (and)
+
 import Control.Monad.ST
 import Data.Array
 import Data.Array.ST
@@ -317,9 +319,45 @@ addTests = "ADD / ADC tests" ~: TestList [ addRAR8
                                          , addSPE8
                                          ]
 
-{- TODO: add tests for AND -}
+andRAR8 :: Test
+andRAR8 = "AND A, R8" ~: TestList [ "register updated" ~: reg8 RegA (resultRegisters resultCPU) ~?= 0x0
+                                  , "z flag" ~: flagZ (resultFlags resultCPU) ~?= True
+                                  , "h flag" ~: flagH (resultFlags resultCPU) ~?= True
+                                  ] where
+  resultCPU = runST $ do
+    let regs = setReg8 RegA 0x1 (setReg8 RegB 0x10 emptyRegisters)
+    cpu <- withRegisters regs emptyCPU
+    cpu' <- and (Reg8 RegA) (Reg8 RegB) cpu
+    toResultCPU cpu'
+
+andRAHL :: Test
+andRAHL = "AND A, [HL]" ~: TestList [ "register updated" ~: reg8 RegA (resultRegisters resultCPU) ~?= 0x0
+                                    , "z flag" ~: flagZ (resultFlags resultCPU) ~?= True
+                                    , "h flag" ~: flagH (resultFlags resultCPU) ~?= True
+                                    ] where
+  resultCPU = runST $ do
+    let regs = setReg8 RegA 0x1 (setReg16 RegH RegL 0x1111 emptyRegisters)
+    cpu <- withRegisters regs emptyCPU
+    writeArray (ram cpu) 0x1111 0x10
+    cpu' <- and (Reg8 RegA) (Indirect (Reg16 RegH RegL)) cpu
+    toResultCPU cpu'
+
+andRAN8 :: Test
+andRAN8 = "AND A, n8" ~: TestList [ "register updated" ~: reg8 RegA (resultRegisters resultCPU) ~?= 0x0
+                                  , "z flag" ~: flagZ (resultFlags resultCPU) ~?= True
+                                  , "h flag" ~: flagH (resultFlags resultCPU) ~?= True
+                                  ] where
+  resultCPU = runST $ do
+    let regs = setReg8 RegA 0x1 emptyRegisters
+    cpu <- withRegisters regs emptyCPU
+    cpu' <- and (Reg8 RegA) (Uimm8 0x10) cpu
+    toResultCPU cpu'
+
 andTests :: Test
-andTests = "AND tests" ~: TestList []
+andTests = "AND tests" ~: TestList [ andRAR8
+                                   , andRAHL
+                                   , andRAN8
+                                   ]
 
 {- TODO: add test for HALT -}
 haltTests :: Test
@@ -330,7 +368,7 @@ nopTests :: Test
 nopTests = "NOP tests" ~: TestList []
 
 cpuTests :: Test
-cpuTests = "cpuTests" ~: TestList [loadTests
+cpuTests = "cpuTests" ~: TestList [ loadTests
                                   , addTests
                                   , andTests
                                   , haltTests

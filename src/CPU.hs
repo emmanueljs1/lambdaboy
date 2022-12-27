@@ -212,7 +212,13 @@ and (Reg8 RegA) op = do
 
 -- TODO: implement
 fetchInstruction :: Monad m => StateT (CPU a m) m Ins
-fetchInstruction = undefined
+fetchInstruction = do
+  cpu <- get
+  case pc cpu of
+    0 ->
+      let r = if True then RegB else RegC in
+      return $ Ins (Add WithCarryIncluded (Reg8 RegA) (Reg8 r))
+    _ -> return $ Ins (Add WithCarryIncluded (Reg8 RegA) (Uimm8 10))
 
 executeInstruction :: MArray a Word8 m => Instruction k -> StateT (CPU a m) m ()
 executeInstruction (Load o1 o2) = load o1 o2

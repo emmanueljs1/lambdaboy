@@ -72,21 +72,21 @@ loadIndirectR16RA = "LD (r16), A" ~: resultRAM resultCPU ! 0x1111 ~?= 0xF where
   resultCPU = runST $ do
     let regs = setReg8 RegA 0xF (setReg16 RegB RegC 0x1111 emptyRegisters)
     cpu <- withRegisters regs emptyCPU
-    cpu' <- execStateT (load (Indirect (Reg16 RegB RegC)) (Reg8 RegA)) cpu
+    cpu' <- execStateT (load (Indirect (Reg16 RegB RegC)) RegisterA) cpu
     toResultCPU cpu'
 
 loadIndirectN16RA :: Test
 loadIndirectN16RA = "LD (n16), A" ~: resultRAM resultCPU ! 0x1111 ~?= 0xF where
   resultCPU = runST $ do
     cpu <- withRegisters (setReg8 RegA 0xF emptyRegisters) emptyCPU
-    cpu' <- execStateT (load (Indirect (Uimm16 0x1111)) (Reg8 RegA)) cpu
+    cpu' <- execStateT (load (Indirect (Uimm16 0x1111)) RegisterA) cpu
     toResultCPU cpu'
 
 loadFF00N8RA :: Test
 loadFF00N8RA = "LD ($FF00 + n8), A" ~: resultRAM resultCPU ! 0xFF01 ~?= 0xF where
   resultCPU = runST $ do
     cpu <- withRegisters (setReg8 RegA 0xF emptyRegisters) emptyCPU
-    cpu' <- execStateT (load (Indirect (FF00Offset (Uimm8 0x1))) (Reg8 RegA)) cpu
+    cpu' <- execStateT (load (Indirect (FF00Offset (Uimm8 0x1))) RegisterA) cpu
     toResultCPU cpu'
 
 loadFF00RCRA :: Test
@@ -94,7 +94,7 @@ loadFF00RCRA = "LD ($FF00 + C), A" ~: resultRAM resultCPU ! 0xFF01 ~?= 0xF where
   resultCPU = runST $ do
     let regs = setReg8 RegC 0x1 $ setReg8 RegA 0xF emptyRegisters
     cpu <- withRegisters regs emptyCPU
-    cpu' <- execStateT (load (Indirect (FF00Offset (Uimm8 0x1))) (Reg8 RegA)) cpu
+    cpu' <- execStateT (load (Indirect (FF00Offset (Uimm8 0x1))) RegisterA) cpu
     toResultCPU cpu'
 
 loadRAIndirectR16 :: Test
@@ -102,7 +102,7 @@ loadRAIndirectR16 = "LD A, (r16)" ~: reg8 RegA (resultRegisters resultCPU) ~?= 0
   resultCPU = runST $ do
     cpu <- withRegisters (setReg16 RegB RegC 0x1111 emptyRegisters) emptyCPU
     writeArray (ram cpu) 0x1111 0xF
-    cpu' <- execStateT (load (Reg8 RegA) (Indirect (Reg16 RegB RegC))) cpu
+    cpu' <- execStateT (load RegisterA (Indirect (Reg16 RegB RegC))) cpu
     toResultCPU cpu'
 
 loadRAIndirectN16 :: Test
@@ -110,7 +110,7 @@ loadRAIndirectN16 = "LD A, (n16)" ~: reg8 RegA (resultRegisters resultCPU) ~?= 0
   resultCPU = runST $ do
     cpu <- emptyCPU
     writeArray (ram cpu) 0x1111 0xF
-    cpu' <- execStateT (load (Reg8 RegA) (Indirect (Uimm16 0x1111))) cpu
+    cpu' <- execStateT (load RegisterA (Indirect (Uimm16 0x1111))) cpu
     toResultCPU cpu'
 
 loadRAFF00N8 :: Test
@@ -118,7 +118,7 @@ loadRAFF00N8 = "LD A, ($FF00 + n8)" ~: reg8 RegA (resultRegisters resultCPU) ~?=
   resultCPU = runST $ do
     cpu <- emptyCPU
     writeArray (ram cpu) 0xFF01 0xF
-    cpu' <- execStateT (load (Reg8 RegA) (Indirect (FF00Offset (Uimm8 0x1)))) cpu
+    cpu' <- execStateT (load RegisterA (Indirect (FF00Offset (Uimm8 0x1)))) cpu
     toResultCPU cpu'
 
 
@@ -127,7 +127,7 @@ loadRAFF00RC = "LD A, ($FF00 + C)" ~: reg8 RegA (resultRegisters resultCPU) ~?= 
   resultCPU = runST $ do
     cpu <- withRegisters (setReg8 RegC 0x1 emptyRegisters) emptyCPU
     writeArray (ram cpu) 0xFF01 0xF
-    cpu' <- execStateT (load (Reg8 RegA) (Indirect (FF00Offset (Reg8 RegC)))) cpu
+    cpu' <- execStateT (load RegisterA (Indirect (FF00Offset RegisterC))) cpu
     toResultCPU cpu'
 
 loadIndirectHLIRA :: Test
@@ -138,7 +138,7 @@ loadIndirectHLIRA =
   resultCPU = runST $ do
     let regs = setReg16 RegH RegL 0x1111 (setReg8 RegA 0xF emptyRegisters)
     cpu <- withRegisters regs emptyCPU
-    cpu' <- execStateT (load (Indirect (PostInstruction (Reg16 RegH RegL) IncrementAfter)) (Reg8 RegA)) cpu
+    cpu' <- execStateT (load (Indirect (PostInstruction (Reg16 RegH RegL) IncrementAfter)) RegisterA) cpu
     toResultCPU cpu'
 
 loadIndirectHLDRA :: Test
@@ -149,7 +149,7 @@ loadIndirectHLDRA =
   resultCPU = runST $ do
     let regs = setReg16 RegH RegL 0x1111 (setReg8 RegA 0xF emptyRegisters)
     cpu <- withRegisters regs emptyCPU
-    cpu' <- execStateT (load (Indirect (PostInstruction (Reg16 RegH RegL) DecrementAfter)) (Reg8 RegA)) cpu
+    cpu' <- execStateT (load (Indirect (PostInstruction (Reg16 RegH RegL) DecrementAfter)) RegisterA) cpu
     toResultCPU cpu'
 
 loadRAIndirectHLI :: Test
@@ -160,7 +160,7 @@ loadRAIndirectHLI =
   resultCPU = runST $ do
     cpu <- withRegisters (setReg16 RegH RegL 0x1111 emptyRegisters) emptyCPU
     writeArray (ram cpu) 0x1111 0xF
-    cpu' <- execStateT (load (Reg8 RegA) (Indirect (PostInstruction (Reg16 RegH RegL) IncrementAfter))) cpu
+    cpu' <- execStateT (load RegisterA (Indirect (PostInstruction (Reg16 RegH RegL) IncrementAfter))) cpu
     toResultCPU cpu'
 
 
@@ -172,7 +172,7 @@ loadRAIndirectHLD =
   resultCPU = runST $ do
     cpu <- withRegisters (setReg16 RegH RegL 0x1111 emptyRegisters) emptyCPU
     writeArray (ram cpu) 0x1111 0xF
-    cpu' <- execStateT (load (Reg8 RegA) (Indirect (PostInstruction (Reg16 RegH RegL) DecrementAfter))) cpu
+    cpu' <- execStateT (load RegisterA (Indirect (PostInstruction (Reg16 RegH RegL) DecrementAfter))) cpu
     toResultCPU cpu'
 
 loadSPN16 :: Test
@@ -251,7 +251,7 @@ addRAR8 = TestList [ "ADD A, r8" ~: add8Expected WithoutCarryIncluded (resultCPU
   resultCPU at = runST $ do
     let regs = setReg8 RegA 0xFF (setReg8 RegB 0x01 emptyRegisters)
     cpu <- withRegisters regs emptyCPU
-    cpu' <- execStateT (add at (Reg8 RegA) (Reg8 RegB)) cpu
+    cpu' <- execStateT (add at RegisterA (Reg8 RegB)) cpu
     toResultCPU cpu'
 
 addRAIndirectHL :: Test
@@ -262,7 +262,7 @@ addRAIndirectHL = TestList [ "ADD A, (HL)" ~: add8Expected WithoutCarryIncluded 
     let regs = setReg8 RegA 0xFF (setReg16 RegH RegL 0x1111 emptyRegisters)
     cpu <- withRegisters regs emptyCPU
     writeArray (ram cpu) 0x1111 0x1
-    cpu' <- execStateT (add at (Reg8 RegA) (Indirect (Reg16 RegH RegL))) cpu
+    cpu' <- execStateT (add at RegisterA (Indirect (Reg16 RegH RegL))) cpu
     toResultCPU cpu'
 
 addRAN8 :: Test
@@ -271,7 +271,7 @@ addRAN8 = TestList [ "ADD A, n8" ~: add8Expected WithoutCarryIncluded (resultCPU
                    ] where
   resultCPU at = runST $ do
     cpu <- withRegisters (setReg8 RegA 0xFF emptyRegisters) emptyCPU
-    cpu' <- execStateT (add at (Reg8 RegA) (Uimm8 0x1)) cpu
+    cpu' <- execStateT (add at RegisterA (Uimm8 0x1)) cpu
     toResultCPU cpu'
 
 addHLR16 :: Test
@@ -328,7 +328,7 @@ andRAR8 = "AND A, R8" ~: TestList [ "register updated" ~: reg8 RegA (resultRegis
   resultCPU = runST $ do
     let regs = setReg8 RegA 0x1 (setReg8 RegB 0x10 emptyRegisters)
     cpu <- withRegisters regs emptyCPU
-    cpu' <- execStateT (and (Reg8 RegA) (Reg8 RegB)) cpu
+    cpu' <- execStateT (and RegisterA (Reg8 RegB)) cpu
     toResultCPU cpu'
 
 andRAHL :: Test
@@ -340,7 +340,7 @@ andRAHL = "AND A, [HL]" ~: TestList [ "register updated" ~: reg8 RegA (resultReg
     let regs = setReg8 RegA 0x1 (setReg16 RegH RegL 0x1111 emptyRegisters)
     cpu <- withRegisters regs emptyCPU
     writeArray (ram cpu) 0x1111 0x10
-    cpu' <- execStateT (and (Reg8 RegA) (Indirect (Reg16 RegH RegL))) cpu
+    cpu' <- execStateT (and RegisterA (Indirect (Reg16 RegH RegL))) cpu
     toResultCPU cpu'
 
 andRAN8 :: Test
@@ -351,7 +351,7 @@ andRAN8 = "AND A, n8" ~: TestList [ "register updated" ~: reg8 RegA (resultRegis
   resultCPU = runST $ do
     let regs = setReg8 RegA 0x1 emptyRegisters
     cpu <- withRegisters regs emptyCPU
-    cpu' <- execStateT (and (Reg8 RegA) (Uimm8 0x10)) cpu
+    cpu' <- execStateT (and RegisterA (Uimm8 0x10)) cpu
     toResultCPU cpu'
 
 andTests :: Test

@@ -54,33 +54,33 @@ data InstructionKind
 
 type family LoadOperands (k1 :: OperandKind) (k2 :: OperandKind) :: InstructionKind where
   -- LD r8, r8
-  LoadOperands ('KReg8 _) ('KReg8 _) = 'KLoad
+  LoadOperands 'KReg8 'KReg8 = 'KLoad
   -- LD r8, n8
-  LoadOperands ('KReg8 _) 'KUimm8 = 'KLoad
+  LoadOperands 'KReg8 'KUimm8 = 'KLoad
   -- LD r16, n16
   LoadOperands ('KReg16 _ _) 'KUimm16 = 'KLoad
   -- LD (HL), r8
-  LoadOperands ('KIndirect ('KReg16 'H 'L)) ('KReg8 _) = 'KLoad
+  LoadOperands ('KIndirect ('KReg16 'H 'L)) 'KReg8 = 'KLoad
   -- LD (HL), n8
   LoadOperands ('KIndirect ('KReg16 'H 'L)) 'KUimm8 = 'KLoad
   -- LD r8, (HL)
-  LoadOperands ('KReg8 _) ('KIndirect ('KReg16 'H 'L)) = 'KLoad
+  LoadOperands 'KReg8 ('KIndirect ('KReg16 'H 'L)) = 'KLoad
   -- LD (r16), A
-  LoadOperands ('KIndirect ('KReg16 _ _)) ('KReg8 'A) = 'KLoad
+  LoadOperands ('KIndirect ('KReg16 _ _)) 'KRegisterA = 'KLoad
   -- LD (n16), A
-  LoadOperands ('KIndirect 'KUimm16) ('KReg8 'A) = 'KLoad
+  LoadOperands ('KIndirect 'KUimm16) 'KRegisterA = 'KLoad
   -- LD ($FF00 + n8), A | LD ($FF00 + C), A
-  LoadOperands ('KIndirect ('KFF00Offset _)) ('KReg8 'A) = 'KLoad
+  LoadOperands ('KIndirect ('KFF00Offset _)) 'KRegisterA = 'KLoad
   -- LD A, (r16)
-  LoadOperands ('KReg8 'A) ('KIndirect ('KReg16 _ _)) = 'KLoad
+  LoadOperands 'KRegisterA ('KIndirect ('KReg16 _ _)) = 'KLoad
   -- LD A, (n16)
-  LoadOperands ('KReg8 'A) ('KIndirect 'KUimm16) = 'KLoad
+  LoadOperands 'KRegisterA ('KIndirect 'KUimm16) = 'KLoad
   -- LD A, ($FF00 + n8) | LD A, ($FF00 + C)
-  LoadOperands ('KReg8 'A) ('KIndirect ('KFF00Offset _)) = 'KLoad
+  LoadOperands 'KRegisterA ('KIndirect ('KFF00Offset _)) = 'KLoad
   -- LD (HLI), A | LD (HLD), A
-  LoadOperands ('KIndirect ('KPostInstruction ('KReg16 'H 'L))) ('KReg8 'A) = 'KLoad
+  LoadOperands ('KIndirect ('KPostInstruction ('KReg16 'H 'L))) 'KRegisterA = 'KLoad
   -- LD A, (HLI) | LD A, (HLD)
-  LoadOperands ('KReg8 'A) ('KIndirect ('KPostInstruction ('KReg16 'H 'L))) = 'KLoad
+  LoadOperands 'KRegisterA ('KIndirect ('KPostInstruction ('KReg16 'H 'L))) = 'KLoad
   -- LD SP, n16
   LoadOperands ('KStackPointer 'KUnchanged) 'KUimm16 = 'KLoad
   -- LD (n16), SP
@@ -100,85 +100,85 @@ data ArithmeticType :: ArithmeticTypeKind -> Type where
 deriving instance Show (ArithmeticType atk)
 
 type family AddOperands (atk :: ArithmeticTypeKind) (k1 :: OperandKind) (k2 :: OperandKind) :: InstructionKind where
-  AddOperands _ ('KReg8 'A) ('KReg8 _) = 'KAdd
-  AddOperands _ ('KReg8 'A) ('KIndirect ('KReg16 'H 'L)) = 'KAdd
-  AddOperands _ ('KReg8 'A) 'KUimm8 = 'KAdd
+  AddOperands _ 'KRegisterA 'KReg8 = 'KAdd
+  AddOperands _ 'KRegisterA ('KIndirect ('KReg16 'H 'L)) = 'KAdd
+  AddOperands _ 'KRegisterA 'KUimm8 = 'KAdd
   AddOperands 'KWithoutCarryIncluded ('KReg16 'H 'L) ('KReg16 _ _) = 'KAdd
   AddOperands 'KWithoutCarryIncluded ('KReg16 'H 'L) ('KStackPointer 'KUnchanged) = 'KAdd
   AddOperands 'KWithoutCarryIncluded ('KStackPointer 'KUnchanged) 'KImm8 = 'KAdd
   AddOperands _ _ _ = 'KInvalid
 
 type family AndOperands (k1 :: OperandKind) (k2 :: OperandKind) :: InstructionKind where
-  AndOperands ('KReg8 'A) ('KReg8 _) = 'KAnd
-  AndOperands ('KReg8 'A) ('KIndirect ('KReg16 'H 'L)) = 'KAnd
-  AndOperands ('KReg8 'A) 'KUimm8 = 'KAnd
+  AndOperands 'KRegisterA 'KReg8 = 'KAnd
+  AndOperands 'KRegisterA ('KIndirect ('KReg16 'H 'L)) = 'KAnd
+  AndOperands 'KRegisterA 'KUimm8 = 'KAnd
   AndOperands _ _ = 'KInvalid
 
 type family CompareOperands (k1 :: OperandKind) (k2 :: OperandKind) :: InstructionKind where
-  CompareOperands ('KReg8 'A) ('KReg8 _) = 'KCompare
-  CompareOperands ('KReg8 'A) ('KIndirect ('KReg16 'H 'L)) = 'KCompare
-  CompareOperands ('KReg8 'A) 'KUimm8 = 'KCompare
+  CompareOperands 'KRegisterA 'KReg8 = 'KCompare
+  CompareOperands 'KRegisterA ('KIndirect ('KReg16 'H 'L)) = 'KCompare
+  CompareOperands 'KRegisterA 'KUimm8 = 'KCompare
   CompareOperands _ _ = 'KInvalid
 
 type family DecrementOperand (ok :: OperandKind) :: InstructionKind where
-  DecrementOperand ('KReg8 _) = 'KDecrement
+  DecrementOperand 'KReg8 = 'KDecrement
   DecrementOperand ('KIndirect ('KReg16 'H 'L)) = 'KDecrement
   DecrementOperand ('KReg16 _ _) = 'KDecrement
   DecrementOperand ('KStackPointer 'KUnchanged) = 'KDecrement
   DecrementOperand _ = 'KInvalid
 
 type family IncrementOperand (ok :: OperandKind) :: InstructionKind where
-  IncrementOperand ('KReg8 _) = 'KIncrement
+  IncrementOperand 'KReg8 = 'KIncrement
   IncrementOperand ('KIndirect ('KReg16 'H 'L)) = 'KIncrement
   IncrementOperand ('KReg16 _ _) = 'KIncrement
   IncrementOperand ('KStackPointer 'KUnchanged) = 'KIncrement
   IncrementOperand _ = 'KInvalid
 
 type family OrOperands (k1 :: OperandKind) (k2 :: OperandKind) :: InstructionKind where
-  OrOperands ('KReg8 'A) ('KReg8 _) = 'KOr
-  OrOperands ('KReg8 'A) ('KIndirect ('KReg16 'H 'L)) = 'KOr
-  OrOperands ('KReg8 'A) 'KUimm8 = 'KOr
+  OrOperands 'KRegisterA 'KReg8 = 'KOr
+  OrOperands 'KRegisterA ('KIndirect ('KReg16 'H 'L)) = 'KOr
+  OrOperands 'KRegisterA 'KUimm8 = 'KOr
   OrOperands _ _ = 'KInvalid
 
 type family SubOperands (k1 :: OperandKind) (k2 :: OperandKind) :: InstructionKind where
-  SubOperands ('KReg8 'A) ('KReg8 _) = 'KSub
-  SubOperands ('KReg8 'A) ('KIndirect ('KReg16 'H 'L)) = 'KSub
-  SubOperands ('KReg8 'A) 'KUimm8 = 'KSub
+  SubOperands 'KRegisterA 'KReg8 = 'KSub
+  SubOperands 'KRegisterA ('KIndirect ('KReg16 'H 'L)) = 'KSub
+  SubOperands 'KRegisterA 'KUimm8 = 'KSub
   SubOperands _ _ = 'KInvalid
 
 type family XorOperands (k1 :: OperandKind) (k2 :: OperandKind) :: InstructionKind where
-  XorOperands ('KReg8 'A) ('KReg8 _) = 'KXor
-  XorOperands ('KReg8 'A) ('KIndirect ('KReg16 'H 'L)) = 'KXor
-  XorOperands ('KReg8 'A) 'KUimm8 = 'KXor
+  XorOperands 'KRegisterA 'KReg8 = 'KXor
+  XorOperands 'KRegisterA ('KIndirect ('KReg16 'H 'L)) = 'KXor
+  XorOperands 'KRegisterA 'KUimm8 = 'KXor
   XorOperands _ _ = 'KInvalid
 
 type family BitOperand (ok :: OperandKind) :: InstructionKind where
-  BitOperand ('KReg8 _) = 'KBit
+  BitOperand 'KReg8 = 'KBit
   BitOperand ('KIndirect ('KReg16 'H 'L)) = 'KBit
   BitOperand _ = 'KInvalid
 
 type family ResOperand (ok :: OperandKind) :: InstructionKind where
-  ResOperand ('KReg8 _) = 'KRes
+  ResOperand 'KReg8 = 'KRes
   ResOperand ('KIndirect ('KReg16 'H 'L)) = 'KRes
   ResOperand _ = 'KInvalid
 
 type family SetOperand (ok :: OperandKind) :: InstructionKind where
-  SetOperand ('KReg8 _) = 'KSet
+  SetOperand 'KReg8 = 'KSet
   SetOperand ('KIndirect ('KReg16 'H 'L)) = 'KSet
   SetOperand _ = 'KInvalid
 
 type family SwapOperand (ok :: OperandKind) :: InstructionKind where
-  SwapOperand ('KReg8 _) = 'KSwap
+  SwapOperand 'KReg8 = 'KSwap
   SwapOperand ('KIndirect ('KReg16 'H 'L)) = 'KSwap
   SwapOperand _ = 'KInvalid
 
 type family RotateOperand (ok :: OperandKind) :: InstructionKind where
-  RotateOperand ('KReg8 _) = 'KRotate
+  RotateOperand 'KReg8 = 'KRotate
   RotateOperand ('KIndirect ('KReg16 'H 'L)) = 'KRotate
   RotateOperand _ = 'KInvalid
 
 type family ShiftOperands (k1 :: OperandKind) (k2 :: OperandKind) :: InstructionKind where
-  ShiftOperands ('KReg8 _) ('KIndirect ('KReg16 'H 'L)) = 'KShift
+  ShiftOperands 'KReg8 ('KIndirect ('KReg16 'H 'L)) = 'KShift
   ShiftOperands _ _ = 'KInvalid
 
 data ShiftInstructionValidity = ValidShift
@@ -201,12 +201,12 @@ type family RetInstruction (ck :: ConditionCodeKind) (prok :: PostRetOperationKi
   RetInstruction _ _ = 'InvalidRetInstruction
 
 type family PopOperand (ok :: OperandKind) :: InstructionKind where
-  PopOperand 'KRegAF = 'KPop
+  PopOperand 'KRegisterAF = 'KPop
   PopOperand ('KReg16 _ _) = 'KPop
   PopOperand _ = 'KInvalid
 
 type family PushOperand (ok :: OperandKind) :: InstructionKind where
-  PushOperand 'KRegAF = 'KPush
+  PushOperand 'KRegisterAF = 'KPush
   PushOperand ('KReg16 _ _) = 'KPush
   PushOperand _ = 'KInvalid
 

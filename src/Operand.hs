@@ -29,14 +29,16 @@ data StackPointerOperationKind = KUnchanged | KAddInt8
 data OperandKind
   = KUimm8
   | KImm8
-  | KReg8 RegType
+  | KReg8
   | KUimm16
   | KReg16 RegType RegType
   | KIndirect OperandKind
   | KFF00Offset OperandKind
   | KStackPointer StackPointerOperationKind
   | KPostInstruction OperandKind
-  | KRegAF
+  | KRegisterAF
+  | KRegisterA
+  | KRegisterC
 
 data AddressValidity = ValidAddress | InvalidAddress
 
@@ -51,7 +53,7 @@ data OffsetValidity = ValidOffset | InvalidOffset
 
 type family Offsetable (ok :: OperandKind) :: OffsetValidity where
   Offsetable 'KUimm8 = 'ValidOffset
-  Offsetable ('KReg8 'C) = 'ValidOffset
+  Offsetable 'KRegisterC = 'ValidOffset
   Offsetable _ = 'InvalidOffset
 
 data StackPointerOperation :: StackPointerOperationKind -> Type where
@@ -73,20 +75,22 @@ type family PostOperable (ok :: OperandKind) :: PostOperableValidity where
 data Operand :: OperandKind -> Type where
   Uimm8 :: Word8 -> Operand 'KUimm8
   Imm8 :: Int8 -> Operand 'KImm8
-  Reg8 :: Reg r -> Operand ('KReg8 r)
+  Reg8 :: Reg r -> Operand 'KReg8
   Uimm16 :: Word16 -> Operand 'KUimm16
   Reg16 :: CombinedRegs r1 r2 ~ 'RegsCompatible => Reg r1 -> Reg r2 -> Operand ('KReg16 r1 r2)
   Indirect :: Addressable ok ~ 'ValidAddress => Operand ok -> Operand ('KIndirect ok)
   FF00Offset :: Offsetable ok ~ 'ValidOffset => Operand ok -> Operand ('KFF00Offset ok)
   StackPointer :: StackPointerOperation k -> Operand ('KStackPointer k)
   PostInstruction :: PostOperable ok ~ 'ValidPostOperable => Operand ok -> PostInstructionOperation -> Operand ('KPostInstruction ok)
-  RegAF :: Operand 'KRegAF
+  RegisterAF :: Operand 'KRegisterAF
+  RegisterA :: Operand 'KRegisterA
+  RegisterC :: Operand 'KRegisterC 
 
 deriving instance Show (Operand ok)
 
 offsetFF00 :: Offsetable ok ~ 'ValidOffset => Operand ok -> Registers -> Word16
 offsetFF00 (Uimm8 n8) _ = 0xFF00 + fromIntegral n8
-offsetFF00 (Reg8 RegC) regs = 0xFF00 + fromIntegral (reg8 RegC regs)
+offsetFF00 RegisterC regs = 0xFF00 + fromIntegral (reg8 RegC regs)
 
 postInstruction :: PostOperable ok ~ 'ValidPostOperable => Operand ('KPostInstruction ok) -> Registers -> Registers
 postInstruction (PostInstruction (Reg16 RegH RegL) operation) regs =

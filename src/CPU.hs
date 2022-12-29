@@ -112,39 +112,39 @@ load (Reg8 r) (Indirect (Reg16 RegH RegL)) = do
   let regs = registers cpu
   n8 <- lift $ readArray (ram cpu) (reg16 RegH RegL regs)
   put $ cpu { registers = setReg8 r n8 regs }
-load (Indirect (Reg16 r1 r2)) (Reg8 RegA) = do
+load (Indirect (Reg16 r1 r2)) RegisterA = do
   cpu <- get
   let regs = registers cpu
   lift $ writeArray (ram cpu) (reg16 r1 r2 regs) (reg8 RegA regs)
-load (Indirect (Uimm16 n16)) (Reg8 RegA) = do
+load (Indirect (Uimm16 n16)) RegisterA = do
   cpu <- get
   let regs = registers cpu
   lift $ writeArray (ram cpu) n16 (reg8 RegA regs)
-load (Indirect (FF00Offset op)) (Reg8 RegA) = do
+load (Indirect (FF00Offset op)) RegisterA = do
   cpu <- get
   let regs = registers cpu
   lift $ writeArray (ram cpu) (offsetFF00 op regs) (reg8 RegA regs)
-load (Reg8 RegA) (Indirect (Reg16 r1 r2)) = do
+load RegisterA (Indirect (Reg16 r1 r2)) = do
   cpu <- get
   let regs = registers cpu
   n8 <- lift $ readArray (ram cpu) (reg16 r1 r2 regs)
   put $ cpu { registers = setReg8 RegA n8 regs }
-load (Reg8 RegA) (Indirect (Uimm16 n16)) = do
+load RegisterA (Indirect (Uimm16 n16)) = do
   cpu <- get
   let regs = registers cpu
   n8 <- lift $ readArray (ram cpu) n16
   put $ cpu { registers = setReg8 RegA n8 regs }
-load (Reg8 RegA) (Indirect (FF00Offset op)) = do
+load RegisterA (Indirect (FF00Offset op)) = do
   cpu <- get
   let regs = registers cpu
   n8 <- lift $ readArray (ram cpu) (offsetFF00 op regs)
   put $ cpu { registers = setReg8 RegA n8 regs }
-load (Indirect postIns@(PostInstruction (Reg16 RegH RegL) _)) (Reg8 RegA) = do
+load (Indirect postIns@(PostInstruction (Reg16 RegH RegL) _)) RegisterA = do
   cpu <- get
   let regs = registers cpu
   lift $ writeArray (ram cpu) (reg16 RegH RegL regs) (reg8 RegA regs)
   put $ cpu { registers = postInstruction postIns regs }
-load (Reg8 RegA) (Indirect postIns@(PostInstruction (Reg16 RegH RegL) _)) = do
+load RegisterA (Indirect postIns@(PostInstruction (Reg16 RegH RegL) _)) = do
   cpu <- get
   let regs = registers cpu
   n8 <- lift $ readArray (ram cpu) (reg16 RegH RegL regs)
@@ -177,7 +177,7 @@ evalOpWord16 (StackPointer Unchanged) = sp <$> get
 evalOpWord16 _ = undefined -- TODO: add additional possible cases
 
 add :: (MArray a Word8 m, AddOperands atk k1 k2 ~ 'KAdd) => ArithmeticType atk -> Operand k1 -> Operand k2 -> StateT (CPU a m) m ()
-add at (Reg8 RegA) op = do
+add at RegisterA op = do
   cpu <- get
   let regs = registers cpu
   opVal <- evalOpWord8 op
@@ -202,7 +202,7 @@ add WithoutCarryIncluded (StackPointer Unchanged) (Imm8 e8) = do
   put $ cpu { sp = offsetSP (AddInt8 e8) (sp cpu), flags = flags' }
 
 and :: forall a m k1 k2. (MArray a Word8 m, AndOperands k1 k2 ~ 'KAnd) => Operand k1 -> Operand k2 -> StateT (CPU a m) m ()
-and (Reg8 RegA) op = do
+and RegisterA op = do
   cpu <- get
   let regs = registers cpu
   opVal <- evalOpWord8 op

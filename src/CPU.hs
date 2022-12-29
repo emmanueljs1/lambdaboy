@@ -162,25 +162,38 @@ load (Reg16 RegH RegL) (StackPointer spo@(AddInt8 e8)) = do
 load (StackPointer Unchanged) (Reg16 RegH RegL) =
   modify (\cpu -> cpu { sp = reg16 RegH RegL (registers cpu) })
 
-evalOpWord8 :: MArray a Word8 m => Operand k -> StateT (CPU a m) m Word8
-evalOpWord8 (Uimm8 n8) = return n8
-evalOpWord8 (Reg8 r) = reg8 r . registers <$> get
-evalOpWord8 (Indirect (Reg16 RegH RegL)) = do
-  cpu <- get
-  let regs = registers cpu
-  lift $ readArray (ram cpu) (reg16 RegH RegL regs)
-evalOpWord8 _ = undefined -- TODO: add additional possible cases
+class Word8Operand o where
+  evalOp :: MArray a Word8 m => o -> StateT (CPU a m) m Word8
 
-evalOpWord16 :: MArray a Word8 m => Operand k -> StateT (CPU a m) m Word16
-evalOpWord16 (Reg16 r1 r2) = reg16 r1 r2 . registers <$> get
-evalOpWord16 (StackPointer Unchanged) = sp <$> get
-evalOpWord16 _ = undefined -- TODO: add additional possible cases
+instance Word8Operand (Operand 'KUimm8) where
+  evalOp (Uimm8 n8) = return n8
+
+instance Word8Operand (Operand 'KReg8) where
+  evalOp (Reg8 r) = reg8 r . registers <$> get
+
+instance Word8Operand (Operand ('KIndirect ('KReg16 'H 'L))) where
+  evalOp _ = do
+    cpu <- get
+    let regs = registers cpu
+    lift $ readArray (ram cpu) (reg16 RegH RegL regs)
+
+class Word16Operand o where
+  evalOp16 :: MArray a Word8 m => o -> StateT (CPU a m) m Word16
+
+instance Word16Operand (Operand ('KReg16 r1 r2)) where
+  evalOp16 (Reg16 r1 r2) = reg16 r1 r2 . registers <$> get
+
+instance Word16Operand (Operand ('KStackPointer 'KUnchanged)) where
+  evalOp16 _ = sp <$> get
 
 add :: (MArray a Word8 m, AddOperands atk k1 k2 ~ 'KAdd) => ArithmeticType atk -> Operand k1 -> Operand k2 -> StateT (CPU a m) m ()
 add at RegisterA op = do
   cpu <- get
   let regs = registers cpu
-  opVal <- evalOpWord8 op
+  opVal <- case op of
+             Reg8 _ -> evalOp op
+             Uimm8 _ -> evalOp op
+             Indirect (Reg16 RegH RegL) -> evalOp op
   let aVal = reg8 RegA regs
   let added = fromIntegral aVal + fromIntegral opVal
   let flags' = flagsFromInt8 added
@@ -192,7 +205,9 @@ add WithoutCarryIncluded (Reg16 RegH RegL) op = do
   cpu <- get
   let regs = registers cpu
   let hlVal = reg16 RegH RegL regs
-  opVal <- evalOpWord16 op
+  opVal <- case op of
+             Reg16 _ _ -> evalOp16 op
+             StackPointer Unchanged -> evalOp16 op
   let flags' = flagsFromInt16 (fromIntegral hlVal + fromIntegral opVal)
   let regs' = setReg16 RegH RegL (hlVal + opVal) regs
   put $ cpu { registers = regs', flags = flags' { flagZ = False } }
@@ -205,7 +220,10 @@ and :: forall a m k1 k2. (MArray a Word8 m, AndOperands k1 k2 ~ 'KAnd) => Operan
 and RegisterA op = do
   cpu <- get
   let regs = registers cpu
-  opVal <- evalOpWord8 op
+  opVal <- case op of
+             Reg8 _ -> evalOp op
+             Uimm8 _ -> evalOp op
+             Indirect (Reg16 RegH RegL) -> evalOp op
   let regs' = setReg8 RegA (reg8 RegA regs .&. opVal) regs
   let z = reg8 RegA regs' == 0
   put $ cpu { registers = regs', flags = emptyFlags { flagZ = z, flagH = True } }

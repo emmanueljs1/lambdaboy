@@ -3,7 +3,8 @@
 An emulator for the Gameboy written in Haskell
 
 - [x] Datatypes
-- [x] Running an instruction end to end (CPU only)
+- [ ] Running an instruction end to end (CPU only)
+  - In progress 
 - [ ] Executing an entire program (CPU only)
 - [ ] GPU
 - [ ] Interrupts

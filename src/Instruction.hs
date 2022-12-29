@@ -2,6 +2,7 @@ module Instruction
   ( LoadOperands
   , AddOperands
   , AndOperands
+  , CompareOperands
   , InstructionKind (..)
   , Instruction (..)
   , Ins (..)

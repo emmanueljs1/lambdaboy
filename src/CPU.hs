@@ -216,7 +216,7 @@ add WithoutCarryIncluded (StackPointer Unchanged) (Imm8 e8) = do
   let flags' = flagsFromInt8 (fromIntegral e8 + fromIntegral (sp cpu))
   put $ cpu { sp = offsetSP (AddInt8 e8) (sp cpu), flags = flags' }
 
-and :: forall a m k1 k2. (MArray a Word8 m, AndOperands k1 k2 ~ 'KAnd) => Operand k1 -> Operand k2 -> StateT (CPU a m) m ()
+and :: (MArray a Word8 m, AndOperands k1 k2 ~ 'KAnd) => Operand k1 -> Operand k2 -> StateT (CPU a m) m ()
 and RegisterA op = do
   cpu <- get
   let regs = registers cpu
@@ -228,6 +228,20 @@ and RegisterA op = do
   let z = reg8 RegA regs' == 0
   put $ cpu { registers = regs', flags = emptyFlags { flagZ = z, flagH = True } }
 
+cp :: (MArray a Word8 m, CompareOperands k1 k2 ~ 'KCompare) => Operand k1 -> Operand k2 -> StateT (CPU a m) m ()
+cp RegisterA op = do
+  cpu <- get
+  let regs = registers cpu
+  let aVal = reg8 RegA regs
+  opVal <- case op of
+             Reg8 _ -> evalOp op
+             Uimm8 _ -> evalOp op
+             Indirect (Reg16 RegH RegL) -> evalOp op
+  let z = (aVal - opVal) == 0
+  let h = (aVal .&. 0xF) < (opVal .&. 0xF)
+  let c = aVal < opVal
+  put $ cpu { flags = emptyFlags { flagZ = z, flagH = h, flagN = True, flagC = c} }
+
 -- TODO: implement
 fetchInstruction :: Monad m => StateT (CPU a m) m Ins
 fetchInstruction = undefined
@@ -236,6 +250,7 @@ executeInstruction :: MArray a Word8 m => Instruction k -> StateT (CPU a m) m ()
 executeInstruction (Load o1 o2) = load o1 o2
 executeInstruction (Add at o1 o2) = add at o1 o2
 executeInstruction (And o1 o2) = and o1 o2
+executeInstruction (Compare o1 o2) = cp o1 o2
 executeInstruction Halt = modify (\cpu -> cpu { running = False })
 executeInstruction Nop = return ()
 executeInstruction _ = undefined

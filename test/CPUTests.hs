@@ -360,6 +360,10 @@ andTests = "AND tests" ~: TestList [ andRAR8
                                    , andRAN8
                                    ]
 
+{- TODO: add tests for CP -}
+cpTests :: Test
+cpTests = "CP tests" ~: TestList []
+
 {- TODO: add test for HALT -}
 haltTests :: Test
 haltTests = "HALT tests" ~: TestList []
@@ -372,6 +376,7 @@ cpuTests :: Test
 cpuTests = "cpuTests" ~: TestList [ loadTests
                                   , addTests
                                   , andTests
+                                  , cpTests
                                   , haltTests
                                   , nopTests
                                   ]

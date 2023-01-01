@@ -11,6 +11,7 @@ import Data.Array
 import Data.Array.ST
 import Data.Word
 import Test.HUnit
+import Test.QuickCheck
 
 import CPU
 import Instruction
@@ -30,11 +31,11 @@ withSP w st = do
   cpu <- st
   return $ cpu { sp = w }
 
-loadR8R8 :: Test
-loadR8R8 = "LD r8, r8" ~: reg8 RegB (resultRegisters resultCPU) ~?= 0xF where
+prop_loadR8R8 :: Operand 'KReg8 -> Operand 'KReg8 -> Word8 -> Bool
+prop_loadR8R8 (Reg8 r1) (Reg8 r2) n8 = reg8 r1 (resultRegisters resultCPU) == n8 where
   resultCPU = runST $ do
-    cpu <- withRegisters (setReg8 RegA 0xF emptyRegisters) emptyCPU
-    cpu' <- execStateT (load (Reg8 RegB) (Reg8 RegA)) cpu
+    cpu <- withRegisters (setReg8 r2 n8 emptyRegisters) emptyCPU
+    cpu' <- execStateT (load (Reg8 r1) (Reg8 r2)) cpu
     toResultCPU cpu'
 
 loadR8N8 :: Test
@@ -211,8 +212,7 @@ loadSPHL = "LD SP, HL" ~: resultSP resultCPU ~?= 0xFFFF where
     toResultCPU cpu'
 
 loadTests :: Test
-loadTests = "LD tests" ~: TestList [ loadR8R8
-                                   , loadR8N8
+loadTests = "LD tests" ~: TestList [ loadR8N8
                                    , loadR16N16
                                    , loadIndirectHLR8
                                    , loadR8IndirectHL
@@ -372,11 +372,21 @@ haltTests = "HALT tests" ~: TestList []
 nopTests :: Test
 nopTests = "NOP tests" ~: TestList []
 
-cpuTests :: Test
-cpuTests = "cpuTests" ~: TestList [ loadTests
-                                  , addTests
-                                  , andTests
-                                  , cpTests
-                                  , haltTests
-                                  , nopTests
-                                  ]
+qc :: IO ()
+qc = do
+  putStrLn "LD r8, r8"
+  quickCheck prop_loadR8R8
+
+unitTests :: Test
+unitTests = "cpuTests" ~: TestList [ loadTests
+                                   , addTests
+                                   , andTests
+                                   , cpTests
+                                   , haltTests
+                                   , nopTests
+                                   ]
+
+cpuTests :: IO ()
+cpuTests = do
+  _ <- runTestTT unitTests
+  qc

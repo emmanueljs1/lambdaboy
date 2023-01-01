@@ -246,7 +246,7 @@ deriving instance Show (PostRetOperation prok)
 data Ins where
   Ins :: Instruction k -> Ins
 
-data Instruction :: InstructionKind -> Type where
+data Instruction ik where
   Load :: LoadOperands k1 k2 ~ 'KLoad => Operand k1 -> Operand k2 -> Instruction 'KLoad
   Add :: AddOperands atk k1 k2 ~ 'KAdd => ArithmeticType atk -> Operand k1 -> Operand k2 -> Instruction 'KAdd
   And :: AndOperands k1 k2 ~ 'KAnd => Operand k1 -> Operand k2 -> Instruction 'KAnd

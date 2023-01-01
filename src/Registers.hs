@@ -15,6 +15,7 @@ where
 import Data.Bits
 import Data.Kind
 import Data.Word
+import Type.Reflection (typeRep, Typeable)
 
 data RegType
   = A
@@ -24,6 +25,7 @@ data RegType
   | E
   | H
   | L
+  deriving (Show, Typeable)
 
 data RegsCompatible = RegsCompatible
 
@@ -32,7 +34,7 @@ type family CombinedRegs (r1 :: RegType) (r2 :: RegType) :: RegsCompatible where
   CombinedRegs 'D 'E = 'RegsCompatible
   CombinedRegs 'H 'L = 'RegsCompatible
 
-data Reg :: RegType -> Type where
+data Reg rt where
   RegA :: Reg 'A
   RegB :: Reg 'B
   RegC :: Reg 'C
@@ -41,7 +43,14 @@ data Reg :: RegType -> Type where
   RegH :: Reg 'H
   RegL :: Reg 'L
 
-deriving instance Show (Reg rt)
+instance Show (Reg rt) where
+  show RegA = "A"
+  show RegB = "B"
+  show RegC = "C"
+  show RegD = "D"
+  show RegE = "E"
+  show RegH = "H"
+  show RegL = "L"
 
 data Registers = Registers {
   regA :: Word8,

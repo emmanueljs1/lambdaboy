@@ -21,6 +21,8 @@ import Data.Int
 import Data.Kind
 import Data.Word
 import GHC.TypeLits
+import Test.QuickCheck
+import Type.Reflection
 
 import Registers
 
@@ -64,7 +66,10 @@ deriving instance Show (StackPointerOperation spo)
 
 data PostInstructionOperation = IncrementAfter
                               | DecrementAfter
-                              deriving Show
+
+instance Show PostInstructionOperation where
+  show IncrementAfter = "I"
+  show DecrementAfter = "D"
 
 data PostOperableValidity = ValidPostOperable | InvalidPostOperable
 
@@ -72,12 +77,12 @@ type family PostOperable (ok :: OperandKind) :: PostOperableValidity where
   PostOperable ('KReg16 'H 'L) = 'ValidPostOperable
   PostOperable _ = 'InvalidPostOperable
 
-data Operand :: OperandKind -> Type where
+data Operand ok where
   Uimm8 :: Word8 -> Operand 'KUimm8
   Imm8 :: Int8 -> Operand 'KImm8
-  Reg8 :: Reg r -> Operand 'KReg8
+  Reg8 :: Typeable r => Reg r -> Operand 'KReg8
   Uimm16 :: Word16 -> Operand 'KUimm16
-  Reg16 :: CombinedRegs r1 r2 ~ 'RegsCompatible => Reg r1 -> Reg r2 -> Operand ('KReg16 r1 r2)
+  Reg16 :: (Typeable r1, Typeable r2, CombinedRegs r1 r2 ~ 'RegsCompatible) => Reg r1 -> Reg r2 -> Operand ('KReg16 r1 r2)
   Indirect :: Addressable ok ~ 'ValidAddress => Operand ok -> Operand ('KIndirect ok)
   FF00Offset :: Offsetable ok ~ 'ValidOffset => Operand ok -> Operand ('KFF00Offset ok)
   StackPointer :: StackPointerOperation k -> Operand ('KStackPointer k)
@@ -86,7 +91,29 @@ data Operand :: OperandKind -> Type where
   RegisterA :: Operand 'KRegisterA
   RegisterC :: Operand 'KRegisterC 
 
-deriving instance Show (Operand ok)
+instance Show (Operand ok) where
+  show (Uimm8 n8) = show n8
+  show (Imm8 n8) = show n8
+  show (Reg8 r) = show r
+  show (Uimm16 n16) = show n16
+  show (Reg16 r1 r2) = show r1 ++ show r2
+  show (Indirect op) = "(" ++ show op ++ ")"
+  show (FF00Offset op) = "(FF00 + " ++ show op  ++ ")"
+  show (StackPointer _) = "SP"
+  show (PostInstruction op pio) = show op ++ show pio
+  show RegisterAF = "AF"
+  show RegisterA = "A"
+  show RegisterC = "C"
+
+instance Arbitrary (Operand 'KReg8) where
+  arbitrary = elements [ Reg8 RegA
+                       , Reg8 RegB
+                       , Reg8 RegC
+                       , Reg8 RegD
+                       , Reg8 RegE
+                       , Reg8 RegH
+                       , Reg8 RegL
+                       ]
 
 offsetFF00 :: Offsetable ok ~ 'ValidOffset => Operand ok -> Registers -> Word16
 offsetFF00 (Uimm8 n8) _ = 0xFF00 + fromIntegral n8

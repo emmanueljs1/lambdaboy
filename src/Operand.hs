@@ -1,8 +1,5 @@
 module Operand
-  ( PostInstructionOperation (..)
-  , PostOperableValidity (..)
-  , PostOperable
-  , StackPointerOperation (..)
+  ( StackPointerOperation (..)
   , StackPointerOperationKind (..)
   , Offsetable
   , OperandKind (..)
@@ -12,7 +9,6 @@ module Operand
   , ConditionCode (..)
   , Uimm3 (..)
   , offsetFF00
-  , postInstruction
   , offsetSP
   )
 where
@@ -33,12 +29,16 @@ data OperandKind
   | KImm8
   | KReg8
   | KUimm16
-  | KReg16 RegType RegType
-  | KIndirect OperandKind
-  | KFF00Offset OperandKind
+  | KReg16
+  | KIndirect
+  | KIndirectHL
+  | KIndirectUimm16
+  | KFF00Offset
   | KStackPointer StackPointerOperationKind
-  | KPostInstruction OperandKind
+  | KRegisterHLI
+  | KRegisterHLD
   | KRegisterAF
+  | KRegisterHL
   | KRegisterA
   | KRegisterC
 
@@ -46,9 +46,11 @@ data AddressValidity = ValidAddress | InvalidAddress
 
 type family Addressable (ok :: OperandKind) :: AddressValidity where
   Addressable 'KUimm16 = 'ValidAddress
-  Addressable ('KReg16 _ _) = 'ValidAddress
-  Addressable ('KFF00Offset _) = 'ValidAddress
-  Addressable ('KPostInstruction ('KReg16 'H 'L)) = 'ValidAddress
+  Addressable 'KReg16 = 'ValidAddress
+  Addressable 'KRegisterHL = 'ValidAddress
+  Addressable 'KFF00Offset = 'ValidAddress
+  Addressable 'KRegisterHLI = 'ValidAddress
+  Addressable 'KRegisterHLD = 'ValidAddress
   Addressable _ = 'InvalidAddress
 
 data OffsetValidity = ValidOffset | InvalidOffset
@@ -64,32 +66,23 @@ data StackPointerOperation :: StackPointerOperationKind -> Type where
 
 deriving instance Show (StackPointerOperation spo)
 
-data PostInstructionOperation = IncrementAfter
-                              | DecrementAfter
-
-instance Show PostInstructionOperation where
-  show IncrementAfter = "I"
-  show DecrementAfter = "D"
-
-data PostOperableValidity = ValidPostOperable | InvalidPostOperable
-
-type family PostOperable (ok :: OperandKind) :: PostOperableValidity where
-  PostOperable ('KReg16 'H 'L) = 'ValidPostOperable
-  PostOperable _ = 'InvalidPostOperable
-
 data Operand ok where
   Uimm8 :: Word8 -> Operand 'KUimm8
   Imm8 :: Int8 -> Operand 'KImm8
   Reg8 :: Typeable r => Reg r -> Operand 'KReg8
   Uimm16 :: Word16 -> Operand 'KUimm16
-  Reg16 :: (Typeable r1, Typeable r2, CombinedRegs r1 r2 ~ 'RegsCompatible) => Reg r1 -> Reg r2 -> Operand ('KReg16 r1 r2)
-  Indirect :: Addressable ok ~ 'ValidAddress => Operand ok -> Operand ('KIndirect ok)
-  FF00Offset :: Offsetable ok ~ 'ValidOffset => Operand ok -> Operand ('KFF00Offset ok)
+  Reg16 :: (Typeable r1, Typeable r2, CombinedRegs r1 r2 ~ 'RegsCompatible) => Reg r1 -> Reg r2 -> Operand 'KReg16
+  Indirect :: Addressable ok ~ 'ValidAddress => Operand ok -> Operand 'KIndirect
+  FF00Offset :: Offsetable ok ~ 'ValidOffset => Operand ok -> Operand 'KFF00Offset
   StackPointer :: StackPointerOperation k -> Operand ('KStackPointer k)
-  PostInstruction :: PostOperable ok ~ 'ValidPostOperable => Operand ok -> PostInstructionOperation -> Operand ('KPostInstruction ok)
+  RegisterHLI :: Operand 'KRegisterHLI
+  RegisterHLD :: Operand 'KRegisterHLD
+  RegisterHL :: Operand 'KRegisterHL
   RegisterAF :: Operand 'KRegisterAF
   RegisterA :: Operand 'KRegisterA
   RegisterC :: Operand 'KRegisterC 
+  IndirectHL :: Operand 'KIndirectHL
+  IndirectUimm16 :: Word16 -> Operand 'KIndirectUimm16
 
 instance Show (Operand ok) where
   show (Uimm8 n8) = show n8
@@ -98,12 +91,17 @@ instance Show (Operand ok) where
   show (Uimm16 n16) = show n16
   show (Reg16 r1 r2) = show r1 ++ show r2
   show (Indirect op) = "(" ++ show op ++ ")"
-  show (FF00Offset op) = "(FF00 + " ++ show op  ++ ")"
-  show (StackPointer _) = "SP"
-  show (PostInstruction op pio) = show op ++ show pio
+  show (FF00Offset op) = "FF00 + " ++ show op
+  show (StackPointer Unchanged) = "SP"
+  show (StackPointer (AddInt8 i8)) = "SP" ++ (if i8 > 0 then "+" else "") ++ show i8
+  show RegisterHLI = "HLI"
+  show RegisterHLD = "HLD"
   show RegisterAF = "AF"
+  show RegisterHL = "HL"
   show RegisterA = "A"
   show RegisterC = "C"
+  show IndirectHL = show $ Indirect RegisterHL
+  show (IndirectUimm16 n16) = show $ Indirect (Uimm16 n16)
 
 instance Arbitrary (Operand 'KReg8) where
   arbitrary = elements [ Reg8 RegA
@@ -115,16 +113,59 @@ instance Arbitrary (Operand 'KReg8) where
                        , Reg8 RegL
                        ]
 
+instance Arbitrary (Operand 'KReg16) where
+  arbitrary = elements [ Reg16 RegB RegC
+                       , Reg16 RegD RegE
+                       , Reg16 RegH RegL
+                       ]
+
+instance Arbitrary (Operand 'KRegisterA) where
+  arbitrary = return RegisterA
+
+instance Arbitrary (Operand 'KRegisterHL) where
+  arbitrary = return RegisterHL
+
+instance Arbitrary (Operand 'KIndirectHL) where
+  arbitrary = return IndirectHL
+
+instance Arbitrary (Operand 'KFF00Offset) where
+  arbitrary = oneof [ return $ FF00Offset RegisterC
+                    , FF00Offset <$> (arbitrary :: Gen (Operand 'KUimm8))
+                    ]
+
+instance Arbitrary (Operand 'KRegisterHLI) where
+  arbitrary = return RegisterHLI
+
+instance Arbitrary (Operand 'KRegisterHLD) where
+  arbitrary = return RegisterHLD
+
+instance Arbitrary (Operand 'KIndirect) where
+  arbitrary = oneof [ Indirect <$> (arbitrary :: Gen (Operand 'KUimm16))
+                    , Indirect <$> (arbitrary :: Gen (Operand 'KReg16))
+                    , Indirect <$> (arbitrary :: Gen (Operand 'KRegisterHL))
+                    , Indirect <$> (arbitrary :: Gen (Operand 'KFF00Offset))
+                    , Indirect <$> (arbitrary :: Gen (Operand 'KRegisterHLI))
+                    , Indirect <$> (arbitrary :: Gen (Operand 'KRegisterHLD))
+                    ]
+
+instance Arbitrary (Operand ('KStackPointer 'KUnchanged)) where
+  arbitrary = return $ StackPointer Unchanged
+
+instance Arbitrary (Operand ('KStackPointer 'KAddInt8)) where
+  arbitrary = StackPointer . AddInt8 <$> arbitrary
+
+instance Arbitrary (Operand 'KIndirectUimm16) where
+  arbitrary = IndirectUimm16 <$> arbitrary
+
+instance Arbitrary (Operand 'KUimm16) where
+  arbitrary = Uimm16 <$> arbitrary
+
+instance Arbitrary (Operand 'KUimm8) where
+  arbitrary = Uimm8 <$> arbitrary
+
 offsetFF00 :: Offsetable ok ~ 'ValidOffset => Operand ok -> Registers -> Word16
 offsetFF00 (Uimm8 n8) _ = 0xFF00 + fromIntegral n8
 offsetFF00 RegisterC regs = 0xFF00 + fromIntegral (reg8 RegC regs)
-
-postInstruction :: PostOperable ok ~ 'ValidPostOperable => Operand ('KPostInstruction ok) -> Registers -> Registers
-postInstruction (PostInstruction (Reg16 RegH RegL) operation) regs =
-  let opFun = case operation of
-               IncrementAfter -> (+1)
-               DecrementAfter -> (\n -> n - 1)
-  in setReg16 RegH RegL (opFun (reg16 RegH RegL regs)) regs
 
 offsetSP :: StackPointerOperation 'KAddInt8 -> Word16 -> Word16
 offsetSP (AddInt8 e8) =

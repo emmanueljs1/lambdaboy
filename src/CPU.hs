@@ -1,15 +1,19 @@
 module CPU
   ( CPU (..)
   , Flags (..)
-  , ResultCPU (..)
+  , FrozenCPU (..)
   , initCPU
-  , toResultCPU
+  , freezeCPU
+  , fromFrozenCPU
   , step
   , fetchInstruction
   , executeInstruction
   , load
   , add
   , and
+  , writeRAM
+  , evalOp
+  , readFrozenRAM
   )
 where
 
@@ -17,8 +21,11 @@ import Control.Monad.State.Lazy
 import Data.Array
 import Data.Array.MArray
 import Data.Bits
+import Data.Foldable (toList)
+import Data.List (intersperse)
 import Data.Word
 import Prelude hiding (and)
+import Test.QuickCheck (Arbitrary, arbitrary, vectorOf)
 
 import Instruction
 import Operand
@@ -26,27 +33,57 @@ import Registers
 
 data Flags = Flags { flagZ :: Bool, flagN :: Bool, flagH :: Bool, flagC :: Bool }
 
-emptyFlags :: Flags
-emptyFlags = Flags { flagZ = False, flagN = False, flagH = False, flagC = False }
+instance Show Flags where
+  show (Flags z n h c) = "{" ++ join listed ++ "}" where
+    listed = intersperse ", " $ map (\(x,y) -> x ++ "=" ++ show y) lst
+    lst = zip ["z","n","h","c"] [z,n,h,c]
+
+instance Arbitrary Flags where
+  arbitrary = Flags <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
+
+initFlags :: Flags
+initFlags = Flags { flagZ = False, flagN = False, flagH = False, flagC = False }
 
 flagsFromInt8 :: Int -> Flags
 flagsFromInt8 i =
   let h = i > 0xF in
   let z = i `mod` 0x100 == 0 in
   let c = i > 0xFF in
-  emptyFlags { flagH = h, flagZ = z, flagC = c }
+  initFlags { flagH = h, flagZ = z, flagC = c }
 
 flagsFromInt16 :: Int -> Flags
 flagsFromInt16 i =
   let h = i > 0xFF in
   let z = i `mod` 0x10000 == 0 in
   let c = i > 0xFFFF in
-  emptyFlags { flagH = h, flagZ = z, flagC = c }
+  initFlags { flagH = h, flagZ = z, flagC = c }
+
+data RAM a = RAM (a Word16 Word8) (a Bool Word8)
+
+initRAM :: MArray a Word8 m => m (RAM a)
+initRAM = do
+  arr <- newArray_ (minBound, maxBound)
+  ffff <- newArray_ (minBound, maxBound)
+  return $ RAM arr ffff
+
+fromFrozenRAM :: MArray a Word8 m => FrozenRAM -> m (RAM a)
+fromFrozenRAM (FrozenRAM arr n8) = do
+  a <- newListArray (minBound, maxBound) $ toList arr
+  b <- newArray (minBound, maxBound) n8
+  return $ RAM a b
+
+readRAM :: MArray a Word8 m => RAM a -> Word16 -> m Word8
+readRAM (RAM _ b) 0xFFFF = readArray b False
+readRAM (RAM a _) i = readArray a i
+
+writeRAM :: MArray a Word8 m => RAM a -> Word16 -> Word8 -> m ()
+writeRAM (RAM _ b) 0xFFFF n8 = writeArray b False n8
+writeRAM (RAM a _) i n8 = writeArray a i n8
 
 data CPU a m where
   CPU :: MArray a Word8 m => { pc :: Word16
                              , sp :: Word16
-                             , ram :: a Word16 Word8
+                             , ram :: RAM a
                              , registers :: Registers
                              , flags :: Flags
                              , running :: Bool
@@ -54,33 +91,92 @@ data CPU a m where
 
 initCPU :: MArray a Word8 m => m (CPU a m)
 initCPU = do
-  arr <- newArray_ (0x0000, 0xFFFF)
+  initRam <- initRAM
   return $ CPU { pc = 0
                , sp = 0
-               , ram = arr
-               , registers = emptyRegisters
-               , flags = emptyFlags
+               , ram = initRam
+               , registers = initRegisters
+               , flags = initFlags
                , running = True
                }
 
-data ResultCPU =  ResultCPU { resultPC :: Word16
-                            , resultSP :: Word16
-                            , resultRAM :: Array Word16 Word8
-                            , resultRegisters :: Registers
-                            , resultFlags :: Flags
-                            , resultRunning :: Bool
-                            }
+data FrozenRAM = FrozenRAM (Array Word16 Word8) Word8
 
-toResultCPU :: MArray a Word8 m => CPU a m -> m ResultCPU
-toResultCPU cpu = do
-  frozenRAM <- freeze $ ram cpu
-  return $ ResultCPU { resultPC = pc cpu
-                     , resultSP = sp cpu
-                     , resultRAM = frozenRAM
-                     , resultRegisters = registers cpu
-                     , resultFlags = flags cpu
-                     , resultRunning = running cpu
+instance Show FrozenRAM where
+  show _ = "(...)"
+
+instance Arbitrary FrozenRAM where
+  arbitrary = FrozenRAM <$> arr <*> arbitrary where
+    arr = listArray (minBound, maxBound) <$> vectorOf 0x10000 arbitrary
+
+fromRAM :: MArray a Word8 m => RAM a -> m FrozenRAM
+fromRAM (RAM a b) = do
+  frozenArr <- freeze a
+  n8 <- readArray b False
+  return $ FrozenRAM frozenArr n8
+
+readFrozenRAM :: FrozenRAM -> Word16 -> Word8
+readFrozenRAM (FrozenRAM _ n8) 0xFFFF = n8
+readFrozenRAM (FrozenRAM arr _) n16 = arr ! n16
+
+data FrozenCPU =  FrozenCPU { frozenPC :: Word16
+                            , frozenSP :: Word16
+                            , frozenRAM :: FrozenRAM
+                            , frozenRegisters :: Registers
+                            , frozenFlags :: Flags
+                            , frozenRunning :: Bool
+                            } deriving Show 
+
+instance Arbitrary FrozenCPU where
+  -- TODO: make PC / SP less arbitrary
+  arbitrary = FrozenCPU <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> pure True
+
+fromFrozenCPU :: forall a m. MArray a Word8 m => FrozenCPU -> m (CPU a m)
+fromFrozenCPU frozenCPU = do
+  thawedRam <- fromFrozenRAM $ frozenRAM frozenCPU
+  return $ CPU { pc = frozenPC frozenCPU
+               , sp = frozenSP frozenCPU
+               , ram = thawedRam
+               , registers = frozenRegisters frozenCPU
+               , flags = frozenFlags frozenCPU
+               , running = frozenRunning frozenCPU
+               }
+
+freezeCPU :: MArray a Word8 m => CPU a m -> m FrozenCPU
+freezeCPU cpu = do
+  frozenRam <- fromRAM $ ram cpu
+  return $ FrozenCPU { frozenPC = pc cpu
+                     , frozenSP = sp cpu
+                     , frozenRAM = frozenRam
+                     , frozenRegisters = registers cpu
+                     , frozenFlags = flags cpu
+                     , frozenRunning = running cpu
                      }
+
+evalOp :: FrozenCPU -> Operand ok -> Bool -> Int
+evalOp _ (Uimm8 n8) _ = fromIntegral n8
+evalOp _ (Imm8 i8) _ = fromIntegral i8
+evalOp cpu (Reg8 r) _ = fromIntegral $ reg8 r (frozenRegisters cpu)
+evalOp _ (Uimm16 n16) _ = fromIntegral n16
+evalOp cpu (Reg16 r1 r2) _ = fromIntegral $ reg16 r1 r2 (frozenRegisters cpu)
+evalOp cpu (Indirect op) undo =
+  let addr = evalOp cpu op undo in
+  fromIntegral $ readFrozenRAM (frozenRAM cpu) (fromIntegral addr)
+evalOp cpu (FF00Offset op) _ = fromIntegral $ offsetFF00 op (frozenRegisters cpu)
+evalOp cpu (StackPointer Unchanged) _ = fromIntegral $ frozenSP cpu
+evalOp cpu (StackPointer (AddInt8 i8)) undo = fromIntegral i8 + evalOp cpu (StackPointer Unchanged) undo
+evalOp cpu RegisterHLI undo =
+  let base = evalOp cpu RegisterHL undo in
+  if undo then base - 1 else base
+evalOp cpu RegisterHLD undo =
+  let base = evalOp cpu RegisterHL undo in
+  if undo then base + 1 else base
+evalOp cpu RegisterHL undo = evalOp cpu (Reg16 RegH RegL) undo
+evalOp cpu RegisterA undo = evalOp cpu (Reg8 RegA) undo
+evalOp _ RegisterAF _ = undefined -- TODO
+evalOp cpu RegisterC undo = evalOp cpu (Reg8 RegC) undo
+evalOp cpu IndirectHL undo = evalOp cpu (Indirect (Reg16 RegH RegL)) undo
+evalOp cpu (IndirectUimm16 n16) undo = evalOp cpu (Indirect (Uimm16 n16)) undo
 
 step :: MArray a Word8 m => StateT (CPU a m) m (CPU a m)
 step = do
@@ -99,88 +195,108 @@ load (Reg8 r1) (Uimm8 n8) =
   modify (\cpu -> cpu { registers = setReg8 r1 n8 (registers cpu) })
 load (Reg16 r1 r2) (Uimm16 n16) =
   modify (\cpu -> cpu { registers = setReg16 r1 r2 n16 (registers cpu) })
-load (Indirect (Reg16 RegH RegL)) (Reg8 r) = do
+load IndirectHL (Reg8 r) = do
   cpu <- get
   let regs = registers cpu
-  lift $ writeArray (ram cpu) (reg16 RegH RegL regs) (reg8 r regs)
-load (Indirect (Reg16 RegH RegL)) (Uimm8 uimm8) = do
+  lift $ writeRAM (ram cpu) (reg16 RegH RegL regs) (reg8 r regs)
+load IndirectHL (Uimm8 uimm8) = do
   cpu <- get
   let regs = registers cpu
-  lift $ writeArray (ram cpu) (reg16 RegH RegL regs) uimm8
-load (Reg8 r) (Indirect (Reg16 RegH RegL)) = do
+  lift $ writeRAM (ram cpu) (reg16 RegH RegL regs) uimm8
+load (Reg8 r) IndirectHL = do
   cpu <- get
   let regs = registers cpu
-  n8 <- lift $ readArray (ram cpu) (reg16 RegH RegL regs)
+  n8 <- lift $ readRAM (ram cpu) (reg16 RegH RegL regs)
   put $ cpu { registers = setReg8 r n8 regs }
+load (Indirect RegisterHL) RegisterA = load (Indirect (Reg16 RegH RegL)) RegisterA
 load (Indirect (Reg16 r1 r2)) RegisterA = do
   cpu <- get
   let regs = registers cpu
-  lift $ writeArray (ram cpu) (reg16 r1 r2 regs) (reg8 RegA regs)
+  lift $ writeRAM (ram cpu) (reg16 r1 r2 regs) (reg8 RegA regs)
 load (Indirect (Uimm16 n16)) RegisterA = do
   cpu <- get
   let regs = registers cpu
-  lift $ writeArray (ram cpu) n16 (reg8 RegA regs)
+  lift $ writeRAM (ram cpu) n16 (reg8 RegA regs)
 load (Indirect (FF00Offset op)) RegisterA = do
   cpu <- get
   let regs = registers cpu
-  lift $ writeArray (ram cpu) (offsetFF00 op regs) (reg8 RegA regs)
+  lift $ writeRAM (ram cpu) (offsetFF00 op regs) (reg8 RegA regs)
+load RegisterA (Indirect RegisterHL) = load RegisterA (Indirect (Reg16 RegH RegL))
 load RegisterA (Indirect (Reg16 r1 r2)) = do
   cpu <- get
   let regs = registers cpu
-  n8 <- lift $ readArray (ram cpu) (reg16 r1 r2 regs)
+  n8 <- lift $ readRAM (ram cpu) (reg16 r1 r2 regs)
   put $ cpu { registers = setReg8 RegA n8 regs }
 load RegisterA (Indirect (Uimm16 n16)) = do
   cpu <- get
   let regs = registers cpu
-  n8 <- lift $ readArray (ram cpu) n16
+  n8 <- lift $ readRAM (ram cpu) n16
   put $ cpu { registers = setReg8 RegA n8 regs }
 load RegisterA (Indirect (FF00Offset op)) = do
   cpu <- get
   let regs = registers cpu
-  n8 <- lift $ readArray (ram cpu) (offsetFF00 op regs)
+  n8 <- lift $ readRAM (ram cpu) (offsetFF00 op regs)
   put $ cpu { registers = setReg8 RegA n8 regs }
-load (Indirect postIns@(PostInstruction (Reg16 RegH RegL) _)) RegisterA = do
+load (Indirect RegisterHLI) RegisterA = do
   cpu <- get
   let regs = registers cpu
-  lift $ writeArray (ram cpu) (reg16 RegH RegL regs) (reg8 RegA regs)
-  put $ cpu { registers = postInstruction postIns regs }
-load RegisterA (Indirect postIns@(PostInstruction (Reg16 RegH RegL) _)) = do
+  let regHL = reg16 RegH RegL regs
+  lift $ writeRAM (ram cpu) regHL (reg8 RegA regs)
+  let regs' = setReg16 RegH RegL (regHL + 1) regs -- TODO: use helper functions for I / D
+  put $ cpu { registers = regs' }
+load (Indirect RegisterHLD) RegisterA = do
   cpu <- get
   let regs = registers cpu
-  n8 <- lift $ readArray (ram cpu) (reg16 RegH RegL regs)
-  put $ cpu { registers = postInstruction postIns (setReg8 RegA n8 regs) }
+  let regHL = reg16 RegH RegL regs
+  lift $ writeRAM (ram cpu) regHL (reg8 RegA regs)
+  let regs' = setReg16 RegH RegL (regHL - 1) regs
+  put $ cpu { registers = regs' }
+load RegisterA (Indirect RegisterHLI) = do
+  cpu <- get
+  let regs = registers cpu
+  let regHL = reg16 RegH RegL regs
+  n8 <- lift $ readRAM (ram cpu) regHL
+  let regs' = setReg16 RegH RegL (regHL + 1) regs
+  put $ cpu { registers = setReg8 RegA n8 regs' }
+load RegisterA (Indirect RegisterHLD) = do
+  cpu <- get
+  let regs = registers cpu
+  let regHL = reg16 RegH RegL regs
+  n8 <- lift $ readRAM (ram cpu) regHL
+  let regs' = setReg16 RegH RegL (regHL - 1) regs
+  put $ cpu { registers = setReg8 RegA n8 regs' }
 load (StackPointer Unchanged) (Uimm16 n16) = modify (\cpu -> cpu { sp = n16 })
-load (Indirect (Uimm16 n16)) (StackPointer Unchanged) = do
+load (IndirectUimm16 n16) (StackPointer Unchanged) = do
   cpu <- get
-  lift $ writeArray (ram cpu) n16 (fromIntegral $ sp cpu .&. 0x00FF)
-  lift $ writeArray (ram cpu) (n16 + 1) (fromIntegral $ shiftR (sp cpu) 8)
-load (Reg16 RegH RegL) (StackPointer spo@(AddInt8 e8)) = do
+  lift $ writeRAM (ram cpu) n16 (fromIntegral $ sp cpu .&. 0x00FF)
+  lift $ writeRAM (ram cpu) (n16 + 1) (fromIntegral $ shiftR (sp cpu) 8)
+load RegisterHL (StackPointer spo@(AddInt8 e8)) = do
   cpu <- get
   let flags' = flagsFromInt8 (fromIntegral e8 + fromIntegral (sp cpu))
   let regs' = setReg16 RegH RegL (offsetSP spo (sp cpu)) (registers cpu)
   put $ cpu { registers = regs', flags = flags' { flagZ = False } }
-load (StackPointer Unchanged) (Reg16 RegH RegL) =
+load (StackPointer Unchanged) RegisterHL =
   modify (\cpu -> cpu { sp = reg16 RegH RegL (registers cpu) })
 
 class Word8Operand o where
-  evalOp :: MArray a Word8 m => o -> StateT (CPU a m) m Word8
+  evalOp8 :: MArray a Word8 m => o -> StateT (CPU a m) m Word8
 
 instance Word8Operand (Operand 'KUimm8) where
-  evalOp (Uimm8 n8) = return n8
+  evalOp8 (Uimm8 n8) = return n8
 
 instance Word8Operand (Operand 'KReg8) where
-  evalOp (Reg8 r) = reg8 r . registers <$> get
+  evalOp8 (Reg8 r) = reg8 r . registers <$> get
 
-instance Word8Operand (Operand ('KIndirect ('KReg16 'H 'L))) where
-  evalOp _ = do
+instance Word8Operand (Operand 'KIndirectHL) where
+  evalOp8 _ = do
     cpu <- get
     let regs = registers cpu
-    lift $ readArray (ram cpu) (reg16 RegH RegL regs)
+    lift $ readRAM (ram cpu) (reg16 RegH RegL regs)
 
 class Word16Operand o where
   evalOp16 :: MArray a Word8 m => o -> StateT (CPU a m) m Word16
 
-instance Word16Operand (Operand ('KReg16 r1 r2)) where
+instance Word16Operand (Operand 'KReg16) where
   evalOp16 (Reg16 r1 r2) = reg16 r1 r2 . registers <$> get
 
 instance Word16Operand (Operand ('KStackPointer 'KUnchanged)) where
@@ -191,9 +307,9 @@ add at RegisterA op = do
   cpu <- get
   let regs = registers cpu
   opVal <- case op of
-             Reg8 _ -> evalOp op
-             Uimm8 _ -> evalOp op
-             Indirect (Reg16 RegH RegL) -> evalOp op
+             Reg8 _ -> evalOp8 op
+             Uimm8 _ -> evalOp8 op
+             IndirectHL -> evalOp8 op
   let aVal = reg8 RegA regs
   let added = fromIntegral aVal + fromIntegral opVal
   let flags' = flagsFromInt8 added
@@ -201,7 +317,7 @@ add at RegisterA op = do
                    WithCarryIncluded -> if flagC flags' then 1 else 0
                    WithoutCarryIncluded -> 0
   put $ cpu { registers = setReg8 RegA (aVal + opVal + carryVal) regs, flags = flags' }
-add WithoutCarryIncluded (Reg16 RegH RegL) op = do
+add WithoutCarryIncluded RegisterHL op = do
   cpu <- get
   let regs = registers cpu
   let hlVal = reg16 RegH RegL regs
@@ -221,12 +337,12 @@ and RegisterA op = do
   cpu <- get
   let regs = registers cpu
   opVal <- case op of
-             Reg8 _ -> evalOp op
-             Uimm8 _ -> evalOp op
-             Indirect (Reg16 RegH RegL) -> evalOp op
+             Reg8 _ -> evalOp8 op
+             Uimm8 _ -> evalOp8 op
+             IndirectHL -> evalOp8 op
   let regs' = setReg8 RegA (reg8 RegA regs .&. opVal) regs
   let z = reg8 RegA regs' == 0
-  put $ cpu { registers = regs', flags = emptyFlags { flagZ = z, flagH = True } }
+  put $ cpu { registers = regs', flags = initFlags { flagZ = z, flagH = True } }
 
 cp :: (MArray a Word8 m, CompareOperands k1 k2 ~ 'KCompare) => Operand k1 -> Operand k2 -> StateT (CPU a m) m ()
 cp RegisterA op = do
@@ -234,13 +350,13 @@ cp RegisterA op = do
   let regs = registers cpu
   let aVal = reg8 RegA regs
   opVal <- case op of
-             Reg8 _ -> evalOp op
-             Uimm8 _ -> evalOp op
-             Indirect (Reg16 RegH RegL) -> evalOp op
+             Reg8 _ -> evalOp8 op
+             Uimm8 _ -> evalOp8 op
+             IndirectHL -> evalOp8 op
   let z = (aVal - opVal) == 0
   let h = (aVal .&. 0xF) < (opVal .&. 0xF)
   let c = aVal < opVal
-  put $ cpu { flags = emptyFlags { flagZ = z, flagH = h, flagN = True, flagC = c} }
+  put $ cpu { flags = initFlags { flagZ = z, flagH = h, flagN = True, flagC = c} }
 
 -- TODO: implement
 fetchInstruction :: Monad m => StateT (CPU a m) m Ins

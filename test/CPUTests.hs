@@ -7,7 +7,6 @@ import Prelude hiding (and)
 
 import Control.Monad.State.Lazy
 import Control.Monad.ST
-import Data.Array
 import Data.Array.ST
 import Data.Word
 import Test.HUnit
@@ -31,185 +30,188 @@ withSP w st = do
   cpu <- st
   return $ cpu { sp = w }
 
-prop_loadR8R8 :: Operand 'KReg8 -> Operand 'KReg8 -> Word8 -> Bool
-prop_loadR8R8 (Reg8 r1) (Reg8 r2) n8 = reg8 r1 (resultRegisters resultCPU) == n8 where
-  resultCPU = runST $ do
-    cpu <- withRegisters (setReg8 r2 n8 emptyRegisters) emptyCPU
-    cpu' <- execStateT (load (Reg8 r1) (Reg8 r2)) cpu
-    toResultCPU cpu'
+prop_load :: Instruction 'KLoad -> FrozenCPU -> Bool
+prop_load ins@(Load op1 op2) frozenCPU = checkLoad op1 op2 where
+  frozenCPU' = runST $ do
+    cpu :: CPU (STArray s) (ST s) <- fromFrozenCPU frozenCPU
+    cpu' <- execStateT (executeInstruction ins) cpu
+    freezeCPU cpu'
+  checkLoad :: LoadOperands k1 k2 ~ 'KLoad => Operand k1 -> Operand k2 -> Bool
+  checkLoad _ (StackPointer _) = True
+  checkLoad o1 o2 = evalOp frozenCPU o2 False == evalOp frozenCPU' o1 True
 
 loadR8N8 :: Test
-loadR8N8 = "LD r8, n8" ~: reg8 RegB (resultRegisters resultCPU) ~?= 0xF where
-  resultCPU = runST $ do
+loadR8N8 = "LD r8, n8" ~: reg8 RegB (frozenRegisters frozenCPU) ~?= 0xF where
+  frozenCPU = runST $ do
     cpu <- emptyCPU
     cpu' <- execStateT (load (Reg8 RegB) (Uimm8 0xF)) cpu
-    toResultCPU cpu'
+    freezeCPU cpu'
 
 loadR16N16 :: Test
-loadR16N16 = "LD r16, n16" ~: reg16 RegB RegC (resultRegisters resultCPU) ~?= 0x1111 where
-  resultCPU = runST $ do
+loadR16N16 = "LD r16, n16" ~: reg16 RegB RegC (frozenRegisters frozenCPU) ~?= 0x1111 where
+  frozenCPU = runST $ do
     cpu <- emptyCPU
     cpu' <- execStateT (load (Reg16 RegB RegC) (Uimm16 0x1111)) cpu
-    toResultCPU cpu'
+    freezeCPU cpu'
 
 loadIndirectHLR8 :: Test
-loadIndirectHLR8 = "LD (HL), r8" ~: resultRAM resultCPU ! 0x1111 ~?= 0xF where
-  resultCPU = runST $ do
-    let regs = setReg16 RegH RegL 0x1111 (setReg8 RegC 0xF emptyRegisters)
+loadIndirectHLR8 = "LD (HL), r8" ~: readFrozenRAM (frozenRAM frozenCPU) 0x1111 ~?= 0xF where
+  frozenCPU = runST $ do
+    let regs = setReg16 RegH RegL 0x1111 (setReg8 RegC 0xF initRegisters)
     cpu <- withRegisters regs emptyCPU
-    cpu' <- execStateT (load (Indirect (Reg16 RegH RegL)) (Reg8 RegC)) cpu
-    toResultCPU cpu'
+    cpu' <- execStateT (load IndirectHL (Reg8 RegC)) cpu
+    freezeCPU cpu'
 
 loadR8IndirectHL :: Test
-loadR8IndirectHL = "LD r8, (HL)" ~: reg8 RegC (resultRegisters resultCPU) ~?= 0xF where
-  resultCPU = runST $ do
-    cpu <- withRegisters (setReg16 RegH RegL 0x1111 emptyRegisters) emptyCPU
-    writeArray (ram cpu) 0x1111 0xF
-    cpu' <- execStateT (load (Reg8 RegC) (Indirect (Reg16 RegH RegL))) cpu
-    toResultCPU cpu'
+loadR8IndirectHL = "LD r8, (HL)" ~: reg8 RegC (frozenRegisters frozenCPU) ~?= 0xF where
+  frozenCPU = runST $ do
+    cpu <- withRegisters (setReg16 RegH RegL 0x1111 initRegisters) emptyCPU
+    writeRAM (ram cpu) 0x1111 0xF
+    cpu' <- execStateT (load (Reg8 RegC) IndirectHL) cpu
+    freezeCPU cpu'
 
 loadIndirectR16RA :: Test
-loadIndirectR16RA = "LD (r16), A" ~: resultRAM resultCPU ! 0x1111 ~?= 0xF where
-  resultCPU = runST $ do
-    let regs = setReg8 RegA 0xF (setReg16 RegB RegC 0x1111 emptyRegisters)
+loadIndirectR16RA = "LD (r16), A" ~: readFrozenRAM (frozenRAM frozenCPU) 0x1111 ~?= 0xF where
+  frozenCPU = runST $ do
+    let regs = setReg8 RegA 0xF (setReg16 RegB RegC 0x1111 initRegisters)
     cpu <- withRegisters regs emptyCPU
     cpu' <- execStateT (load (Indirect (Reg16 RegB RegC)) RegisterA) cpu
-    toResultCPU cpu'
+    freezeCPU cpu'
 
 loadIndirectN16RA :: Test
-loadIndirectN16RA = "LD (n16), A" ~: resultRAM resultCPU ! 0x1111 ~?= 0xF where
-  resultCPU = runST $ do
-    cpu <- withRegisters (setReg8 RegA 0xF emptyRegisters) emptyCPU
+loadIndirectN16RA = "LD (n16), A" ~: readFrozenRAM (frozenRAM frozenCPU) 0x1111 ~?= 0xF where
+  frozenCPU = runST $ do
+    cpu <- withRegisters (setReg8 RegA 0xF initRegisters) emptyCPU
     cpu' <- execStateT (load (Indirect (Uimm16 0x1111)) RegisterA) cpu
-    toResultCPU cpu'
+    freezeCPU cpu'
 
 loadFF00N8RA :: Test
-loadFF00N8RA = "LD ($FF00 + n8), A" ~: resultRAM resultCPU ! 0xFF01 ~?= 0xF where
-  resultCPU = runST $ do
-    cpu <- withRegisters (setReg8 RegA 0xF emptyRegisters) emptyCPU
+loadFF00N8RA = "LD ($FF00 + n8), A" ~: readFrozenRAM (frozenRAM frozenCPU) 0xFF01 ~?= 0xF where
+  frozenCPU = runST $ do
+    cpu <- withRegisters (setReg8 RegA 0xF initRegisters) emptyCPU
     cpu' <- execStateT (load (Indirect (FF00Offset (Uimm8 0x1))) RegisterA) cpu
-    toResultCPU cpu'
+    freezeCPU cpu'
 
 loadFF00RCRA :: Test
-loadFF00RCRA = "LD ($FF00 + C), A" ~: resultRAM resultCPU ! 0xFF01 ~?= 0xF where
-  resultCPU = runST $ do
-    let regs = setReg8 RegC 0x1 $ setReg8 RegA 0xF emptyRegisters
+loadFF00RCRA = "LD ($FF00 + C), A" ~: readFrozenRAM (frozenRAM frozenCPU) 0xFF01 ~?= 0xF where
+  frozenCPU = runST $ do
+    let regs = setReg8 RegC 0x1 $ setReg8 RegA 0xF initRegisters
     cpu <- withRegisters regs emptyCPU
     cpu' <- execStateT (load (Indirect (FF00Offset (Uimm8 0x1))) RegisterA) cpu
-    toResultCPU cpu'
+    freezeCPU cpu'
 
 loadRAIndirectR16 :: Test
-loadRAIndirectR16 = "LD A, (r16)" ~: reg8 RegA (resultRegisters resultCPU) ~?= 0xF where
-  resultCPU = runST $ do
-    cpu <- withRegisters (setReg16 RegB RegC 0x1111 emptyRegisters) emptyCPU
-    writeArray (ram cpu) 0x1111 0xF
+loadRAIndirectR16 = "LD A, (r16)" ~: reg8 RegA (frozenRegisters frozenCPU) ~?= 0xF where
+  frozenCPU = runST $ do
+    cpu <- withRegisters (setReg16 RegB RegC 0x1111 initRegisters) emptyCPU
+    writeRAM (ram cpu) 0x1111 0xF
     cpu' <- execStateT (load RegisterA (Indirect (Reg16 RegB RegC))) cpu
-    toResultCPU cpu'
+    freezeCPU cpu'
 
 loadRAIndirectN16 :: Test
-loadRAIndirectN16 = "LD A, (n16)" ~: reg8 RegA (resultRegisters resultCPU) ~?= 0xF where
-  resultCPU = runST $ do
+loadRAIndirectN16 = "LD A, (n16)" ~: reg8 RegA (frozenRegisters frozenCPU) ~?= 0xF where
+  frozenCPU = runST $ do
     cpu <- emptyCPU
-    writeArray (ram cpu) 0x1111 0xF
+    writeRAM (ram cpu) 0x1111 0xF
     cpu' <- execStateT (load RegisterA (Indirect (Uimm16 0x1111))) cpu
-    toResultCPU cpu'
+    freezeCPU cpu'
 
 loadRAFF00N8 :: Test
-loadRAFF00N8 = "LD A, ($FF00 + n8)" ~: reg8 RegA (resultRegisters resultCPU) ~?= 0xF where
-  resultCPU = runST $ do
+loadRAFF00N8 = "LD A, ($FF00 + n8)" ~: reg8 RegA (frozenRegisters frozenCPU) ~?= 0xF where
+  frozenCPU = runST $ do
     cpu <- emptyCPU
-    writeArray (ram cpu) 0xFF01 0xF
+    writeRAM (ram cpu) 0xFF01 0xF
     cpu' <- execStateT (load RegisterA (Indirect (FF00Offset (Uimm8 0x1)))) cpu
-    toResultCPU cpu'
+    freezeCPU cpu'
 
 
 loadRAFF00RC :: Test
-loadRAFF00RC = "LD A, ($FF00 + C)" ~: reg8 RegA (resultRegisters resultCPU) ~?= 0xF where
-  resultCPU = runST $ do
-    cpu <- withRegisters (setReg8 RegC 0x1 emptyRegisters) emptyCPU
-    writeArray (ram cpu) 0xFF01 0xF
+loadRAFF00RC = "LD A, ($FF00 + C)" ~: reg8 RegA (frozenRegisters frozenCPU) ~?= 0xF where
+  frozenCPU = runST $ do
+    cpu <- withRegisters (setReg8 RegC 0x1 initRegisters) emptyCPU
+    writeRAM (ram cpu) 0xFF01 0xF
     cpu' <- execStateT (load RegisterA (Indirect (FF00Offset RegisterC))) cpu
-    toResultCPU cpu'
+    freezeCPU cpu'
 
 loadIndirectHLIRA :: Test
 loadIndirectHLIRA =
-  "LD (HLI), A" ~: TestList [ "address update" ~: resultRAM resultCPU ! 0x1111 ~?= 0xF
-                            , "post instruction" ~: reg16 RegH RegL (resultRegisters resultCPU) ~?= 0x1112
+  "LD (HLI), A" ~: TestList [ "address update" ~: readFrozenRAM (frozenRAM frozenCPU) 0x1111 ~?= 0xF
+                            , "post instruction" ~: reg16 RegH RegL (frozenRegisters frozenCPU) ~?= 0x1112
                             ] where
-  resultCPU = runST $ do
-    let regs = setReg16 RegH RegL 0x1111 (setReg8 RegA 0xF emptyRegisters)
+  frozenCPU = runST $ do
+    let regs = setReg16 RegH RegL 0x1111 (setReg8 RegA 0xF initRegisters)
     cpu <- withRegisters regs emptyCPU
-    cpu' <- execStateT (load (Indirect (PostInstruction (Reg16 RegH RegL) IncrementAfter)) RegisterA) cpu
-    toResultCPU cpu'
+    cpu' <- execStateT (load (Indirect RegisterHLI) RegisterA) cpu
+    freezeCPU cpu'
 
 loadIndirectHLDRA :: Test
 loadIndirectHLDRA =
-  "LD (HLI), A" ~: TestList [ "address update" ~: resultRAM resultCPU ! 0x1111 ~?= 0xF
-                            , "post instruction" ~: reg16 RegH RegL (resultRegisters resultCPU) ~?= 0x1110
+  "LD (HLD), A" ~: TestList [ "address update" ~: readFrozenRAM (frozenRAM frozenCPU) 0x1111 ~?= 0xF
+                            , "post instruction" ~: reg16 RegH RegL (frozenRegisters frozenCPU) ~?= 0x1110
                             ] where
-  resultCPU = runST $ do
-    let regs = setReg16 RegH RegL 0x1111 (setReg8 RegA 0xF emptyRegisters)
+  frozenCPU = runST $ do
+    let regs = setReg16 RegH RegL 0x1111 (setReg8 RegA 0xF initRegisters)
     cpu <- withRegisters regs emptyCPU
-    cpu' <- execStateT (load (Indirect (PostInstruction (Reg16 RegH RegL) DecrementAfter)) RegisterA) cpu
-    toResultCPU cpu'
+    cpu' <- execStateT (load (Indirect RegisterHLD) RegisterA) cpu
+    freezeCPU cpu'
 
 loadRAIndirectHLI :: Test
 loadRAIndirectHLI =
-  "LD A, (HLI)" ~: TestList [ "register update" ~:  reg8 RegA (resultRegisters resultCPU) ~?= 0xF
-                            , "post instruction" ~: reg16 RegH RegL (resultRegisters resultCPU) ~?= 0x1112
+  "LD A, (HLI)" ~: TestList [ "register update" ~:  reg8 RegA (frozenRegisters frozenCPU) ~?= 0xF
+                            , "post instruction" ~: reg16 RegH RegL (frozenRegisters frozenCPU) ~?= 0x1112
                             ] where
-  resultCPU = runST $ do
-    cpu <- withRegisters (setReg16 RegH RegL 0x1111 emptyRegisters) emptyCPU
-    writeArray (ram cpu) 0x1111 0xF
-    cpu' <- execStateT (load RegisterA (Indirect (PostInstruction (Reg16 RegH RegL) IncrementAfter))) cpu
-    toResultCPU cpu'
+  frozenCPU = runST $ do
+    cpu <- withRegisters (setReg16 RegH RegL 0x1111 initRegisters) emptyCPU
+    writeRAM (ram cpu) 0x1111 0xF
+    cpu' <- execStateT (load RegisterA (Indirect RegisterHLI)) cpu
+    freezeCPU cpu'
 
 
 loadRAIndirectHLD :: Test
 loadRAIndirectHLD =
-  "LD A, (HLD)" ~: TestList [ "register update" ~:  reg8 RegA (resultRegisters resultCPU) ~?= 0xF
-                            , "post instruction" ~: reg16 RegH RegL (resultRegisters resultCPU) ~?= 0x1110
+  "LD A, (HLD)" ~: TestList [ "register update" ~:  reg8 RegA (frozenRegisters frozenCPU) ~?= 0xF
+                            , "post instruction" ~: reg16 RegH RegL (frozenRegisters frozenCPU) ~?= 0x1110
                             ] where
-  resultCPU = runST $ do
-    cpu <- withRegisters (setReg16 RegH RegL 0x1111 emptyRegisters) emptyCPU
-    writeArray (ram cpu) 0x1111 0xF
-    cpu' <- execStateT (load RegisterA (Indirect (PostInstruction (Reg16 RegH RegL) DecrementAfter))) cpu
-    toResultCPU cpu'
+  frozenCPU = runST $ do
+    cpu <- withRegisters (setReg16 RegH RegL 0x1111 initRegisters) emptyCPU
+    writeRAM (ram cpu) 0x1111 0xF
+    cpu' <- execStateT (load RegisterA (Indirect RegisterHLD)) cpu
+    freezeCPU cpu'
 
 loadSPN16 :: Test
-loadSPN16 = "LD SP, n16" ~: resultSP resultCPU ~?= 0xFFFF where
-  resultCPU = runST $ do
+loadSPN16 = "LD SP, n16" ~: frozenSP frozenCPU ~?= 0xFFFF where
+  frozenCPU = runST $ do
     cpu <- emptyCPU
     cpu' <- execStateT (load (StackPointer Unchanged) (Uimm16 0xFFFF)) cpu
-    toResultCPU cpu'
+    freezeCPU cpu'
 
 loadIndirectN16SP :: Test
 loadIndirectN16SP =
-  "LD (n16), SP" ~: TestList [ "first addr update" ~: resultRAM resultCPU ! 0x1111 ~?= 0xFF
-                             , "second addr update" ~: resultRAM resultCPU ! 0x1112 ~?= 0xFF
+  "LD (n16), SP" ~: TestList [ "first addr update" ~: readFrozenRAM (frozenRAM frozenCPU) 0x1111 ~?= 0xFF
+                             , "second addr update" ~: readFrozenRAM (frozenRAM frozenCPU) 0x1112 ~?= 0xFF
                              ] where
-  resultCPU = runST $ do
+  frozenCPU = runST $ do
     cpu <- withSP 0xFFFF emptyCPU
-    cpu' <- execStateT (load (Indirect (Uimm16 0x1111)) (StackPointer Unchanged)) cpu
-    toResultCPU cpu'
+    cpu' <- execStateT (load (IndirectUimm16 0x1111) (StackPointer Unchanged)) cpu
+    freezeCPU cpu'
 
 loadHLSPE8 :: Test
 loadHLSPE8 =
-  "LD HL, SP + e8" ~: TestList [ "registers update" ~: reg16 RegH RegL (resultRegisters resultCPU) ~?= 0x0000
-                               , "c flag" ~: flagC (resultFlags resultCPU) ~?= True
-                               , "h flag" ~: flagH (resultFlags resultCPU) ~?= True
+  "LD HL, SP + e8" ~: TestList [ "registers update" ~: reg16 RegH RegL (frozenRegisters frozenCPU) ~?= 0x0000
+                               , "c flag" ~: flagC (frozenFlags frozenCPU) ~?= True
+                               , "h flag" ~: flagH (frozenFlags frozenCPU) ~?= True
                                ] where
-  resultCPU = runST $ do
+  frozenCPU = runST $ do
     cpu <- withSP 0xFFFF emptyCPU
-    cpu' <- execStateT (load (Reg16 RegH RegL) (StackPointer (AddInt8 1))) cpu
-    toResultCPU cpu'
+    cpu' <- execStateT (load RegisterHL (StackPointer (AddInt8 1))) cpu
+    freezeCPU cpu'
 
 loadSPHL :: Test
-loadSPHL = "LD SP, HL" ~: resultSP resultCPU ~?= 0xFFFF where
-  resultCPU = runST $ do
-    cpu <- withRegisters (setReg16 RegH RegL 0xFFFF emptyRegisters) emptyCPU
-    cpu' <- execStateT (load (StackPointer Unchanged) (Reg16 RegH RegL)) cpu
-    toResultCPU cpu'
+loadSPHL = "LD SP, HL" ~: frozenSP frozenCPU ~?= 0xFFFF where
+  frozenCPU = runST $ do
+    cpu <- withRegisters (setReg16 RegH RegL 0xFFFF initRegisters) emptyCPU
+    cpu' <- execStateT (load (StackPointer Unchanged) RegisterHL) cpu
+    freezeCPU cpu'
 
 loadTests :: Test
 loadTests = "LD tests" ~: TestList [ loadR8N8
@@ -234,82 +236,82 @@ loadTests = "LD tests" ~: TestList [ loadR8N8
                                    , loadSPHL
                                    ]
 
-add8Expected :: ArithmeticType atk -> ResultCPU -> Test
-add8Expected at resultCPU = TestList [ "register update" ~: reg8 RegA (resultRegisters resultCPU) ~?= 0x00 + carry at
-                                     , "c flag" ~: flagC (resultFlags resultCPU) ~?= True
-                                     , "h flag" ~: flagH (resultFlags resultCPU) ~?= True
-                                     , "z flag" ~: flagZ (resultFlags resultCPU) ~?= True
+add8Expected :: ArithmeticType atk -> FrozenCPU -> Test
+add8Expected at frozenCPU = TestList [ "register update" ~: reg8 RegA (frozenRegisters frozenCPU) ~?= 0x00 + carry at
+                                     , "c flag" ~: flagC (frozenFlags frozenCPU) ~?= True
+                                     , "h flag" ~: flagH (frozenFlags frozenCPU) ~?= True
+                                     , "z flag" ~: flagZ (frozenFlags frozenCPU) ~?= True
                                      ] where
   carry :: ArithmeticType atk -> Word8
   carry WithCarryIncluded = 0x1
   carry WithoutCarryIncluded = 0x0
 
 addRAR8 :: Test
-addRAR8 = TestList [ "ADD A, r8" ~: add8Expected WithoutCarryIncluded (resultCPU WithoutCarryIncluded)
-                   , "ADC A, r8" ~: add8Expected WithCarryIncluded (resultCPU WithCarryIncluded)
+addRAR8 = TestList [ "ADD A, r8" ~: add8Expected WithoutCarryIncluded (frozenCPU WithoutCarryIncluded)
+                   , "ADC A, r8" ~: add8Expected WithCarryIncluded (frozenCPU WithCarryIncluded)
                    ] where
-  resultCPU at = runST $ do
-    let regs = setReg8 RegA 0xFF (setReg8 RegB 0x01 emptyRegisters)
+  frozenCPU at = runST $ do
+    let regs = setReg8 RegA 0xFF (setReg8 RegB 0x01 initRegisters)
     cpu <- withRegisters regs emptyCPU
     cpu' <- execStateT (add at RegisterA (Reg8 RegB)) cpu
-    toResultCPU cpu'
+    freezeCPU cpu'
 
 addRAIndirectHL :: Test
-addRAIndirectHL = TestList [ "ADD A, (HL)" ~: add8Expected WithoutCarryIncluded (resultCPU WithoutCarryIncluded)
-                           , "ADC A, (HL)" ~: add8Expected WithCarryIncluded (resultCPU WithCarryIncluded)
+addRAIndirectHL = TestList [ "ADD A, (HL)" ~: add8Expected WithoutCarryIncluded (frozenCPU WithoutCarryIncluded)
+                           , "ADC A, (HL)" ~: add8Expected WithCarryIncluded (frozenCPU WithCarryIncluded)
                            ] where
-  resultCPU at = runST $ do
-    let regs = setReg8 RegA 0xFF (setReg16 RegH RegL 0x1111 emptyRegisters)
+  frozenCPU at = runST $ do
+    let regs = setReg8 RegA 0xFF (setReg16 RegH RegL 0x1111 initRegisters)
     cpu <- withRegisters regs emptyCPU
-    writeArray (ram cpu) 0x1111 0x1
-    cpu' <- execStateT (add at RegisterA (Indirect (Reg16 RegH RegL))) cpu
-    toResultCPU cpu'
+    writeRAM (ram cpu) 0x1111 0x1
+    cpu' <- execStateT (add at RegisterA IndirectHL) cpu
+    freezeCPU cpu'
 
 addRAN8 :: Test
-addRAN8 = TestList [ "ADD A, n8" ~: add8Expected WithoutCarryIncluded (resultCPU WithoutCarryIncluded)
-                   , "ADC A, n8" ~: add8Expected WithCarryIncluded (resultCPU WithCarryIncluded)
+addRAN8 = TestList [ "ADD A, n8" ~: add8Expected WithoutCarryIncluded (frozenCPU WithoutCarryIncluded)
+                   , "ADC A, n8" ~: add8Expected WithCarryIncluded (frozenCPU WithCarryIncluded)
                    ] where
-  resultCPU at = runST $ do
-    cpu <- withRegisters (setReg8 RegA 0xFF emptyRegisters) emptyCPU
+  frozenCPU at = runST $ do
+    cpu <- withRegisters (setReg8 RegA 0xFF initRegisters) emptyCPU
     cpu' <- execStateT (add at RegisterA (Uimm8 0x1)) cpu
-    toResultCPU cpu'
+    freezeCPU cpu'
 
 addHLR16 :: Test
-addHLR16 = "ADD HL, r16" ~: TestList [ "registers updated" ~: reg16 RegH RegL (resultRegisters resultCPU) ~?= 0x0000
-                                    , "c flag" ~: flagC (resultFlags resultCPU) ~?= True
-                                    , "h flag" ~: flagH (resultFlags resultCPU) ~?= True
-                                    , "z flag" ~: flagZ (resultFlags resultCPU) ~?= False
-                                    , "n flag" ~: flagN (resultFlags resultCPU) ~?= False
+addHLR16 = "ADD HL, r16" ~: TestList [ "registers updated" ~: reg16 RegH RegL (frozenRegisters frozenCPU) ~?= 0x0000
+                                    , "c flag" ~: flagC (frozenFlags frozenCPU) ~?= True
+                                    , "h flag" ~: flagH (frozenFlags frozenCPU) ~?= True
+                                    , "z flag" ~: flagZ (frozenFlags frozenCPU) ~?= False
+                                    , "n flag" ~: flagN (frozenFlags frozenCPU) ~?= False
                                     ] where
-  resultCPU = runST $ do
-    let regs = setReg16 RegH RegL 0xFFFF (setReg16 RegB RegC 0x0001 emptyRegisters)
+  frozenCPU = runST $ do
+    let regs = setReg16 RegH RegL 0xFFFF (setReg16 RegB RegC 0x0001 initRegisters)
     cpu <- withRegisters regs emptyCPU
-    cpu' <- execStateT (add WithoutCarryIncluded (Reg16 RegH RegL) (Reg16 RegB RegC)) cpu
-    toResultCPU cpu'
+    cpu' <- execStateT (add WithoutCarryIncluded RegisterHL (Reg16 RegB RegC)) cpu
+    freezeCPU cpu'
 
 addHLSP :: Test
-addHLSP = "ADD HL, r16" ~: TestList [ "registers updated" ~: reg16 RegH RegL (resultRegisters resultCPU) ~?= 0x0000
-                                    , "c flag" ~: flagC (resultFlags resultCPU) ~?= True
-                                    , "h flag" ~: flagH (resultFlags resultCPU) ~?= True
-                                    , "z flag" ~: flagZ (resultFlags resultCPU) ~?= False
-                                    , "n flag" ~: flagN (resultFlags resultCPU) ~?= False
+addHLSP = "ADD HL, r16" ~: TestList [ "registers updated" ~: reg16 RegH RegL (frozenRegisters frozenCPU) ~?= 0x0000
+                                    , "c flag" ~: flagC (frozenFlags frozenCPU) ~?= True
+                                    , "h flag" ~: flagH (frozenFlags frozenCPU) ~?= True
+                                    , "z flag" ~: flagZ (frozenFlags frozenCPU) ~?= False
+                                    , "n flag" ~: flagN (frozenFlags frozenCPU) ~?= False
                                     ] where
-  resultCPU = runST $ do
-    let regs = setReg16 RegH RegL 0xFFFF emptyRegisters
+  frozenCPU = runST $ do
+    let regs = setReg16 RegH RegL 0xFFFF initRegisters
     cpu <- withSP 0x0001 $ withRegisters regs emptyCPU
-    cpu' <- execStateT (add WithoutCarryIncluded (Reg16 RegH RegL) (StackPointer Unchanged)) cpu
-    toResultCPU cpu'
+    cpu' <- execStateT (add WithoutCarryIncluded RegisterHL (StackPointer Unchanged)) cpu
+    freezeCPU cpu'
 
 addSPE8 :: Test
 addSPE8 =
-  "ADD SP, e8" ~: TestList [ "sp update" ~: resultSP resultCPU ~?= 0x0000
-                           , "c flag" ~: flagC (resultFlags resultCPU) ~?= True
-                           , "h flag" ~: flagH (resultFlags resultCPU) ~?= True
+  "ADD SP, e8" ~: TestList [ "sp update" ~: frozenSP frozenCPU ~?= 0x0000
+                           , "c flag" ~: flagC (frozenFlags frozenCPU) ~?= True
+                           , "h flag" ~: flagH (frozenFlags frozenCPU) ~?= True
                            ] where
-  resultCPU = runST $ do
+  frozenCPU = runST $ do
     cpu <- withSP 0xFFFF emptyCPU
     cpu' <- execStateT (add WithoutCarryIncluded (StackPointer Unchanged) (Imm8 1)) cpu
-    toResultCPU cpu'
+    freezeCPU cpu'
 
 addTests :: Test
 addTests = "ADD / ADC tests" ~: TestList [ addRAR8
@@ -321,38 +323,38 @@ addTests = "ADD / ADC tests" ~: TestList [ addRAR8
                                          ]
 
 andRAR8 :: Test
-andRAR8 = "AND A, R8" ~: TestList [ "register updated" ~: reg8 RegA (resultRegisters resultCPU) ~?= 0x0
-                                  , "z flag" ~: flagZ (resultFlags resultCPU) ~?= True
-                                  , "h flag" ~: flagH (resultFlags resultCPU) ~?= True
+andRAR8 = "AND A, R8" ~: TestList [ "register updated" ~: reg8 RegA (frozenRegisters frozenCPU) ~?= 0x0
+                                  , "z flag" ~: flagZ (frozenFlags frozenCPU) ~?= True
+                                  , "h flag" ~: flagH (frozenFlags frozenCPU) ~?= True
                                   ] where
-  resultCPU = runST $ do
-    let regs = setReg8 RegA 0x1 (setReg8 RegB 0x10 emptyRegisters)
+  frozenCPU = runST $ do
+    let regs = setReg8 RegA 0x1 (setReg8 RegB 0x10 initRegisters)
     cpu <- withRegisters regs emptyCPU
     cpu' <- execStateT (and RegisterA (Reg8 RegB)) cpu
-    toResultCPU cpu'
+    freezeCPU cpu'
 
 andRAHL :: Test
-andRAHL = "AND A, [HL]" ~: TestList [ "register updated" ~: reg8 RegA (resultRegisters resultCPU) ~?= 0x0
-                                    , "z flag" ~: flagZ (resultFlags resultCPU) ~?= True
-                                    , "h flag" ~: flagH (resultFlags resultCPU) ~?= True
+andRAHL = "AND A, [HL]" ~: TestList [ "register updated" ~: reg8 RegA (frozenRegisters frozenCPU) ~?= 0x0
+                                    , "z flag" ~: flagZ (frozenFlags frozenCPU) ~?= True
+                                    , "h flag" ~: flagH (frozenFlags frozenCPU) ~?= True
                                     ] where
-  resultCPU = runST $ do
-    let regs = setReg8 RegA 0x1 (setReg16 RegH RegL 0x1111 emptyRegisters)
+  frozenCPU = runST $ do
+    let regs = setReg8 RegA 0x1 (setReg16 RegH RegL 0x1111 initRegisters)
     cpu <- withRegisters regs emptyCPU
-    writeArray (ram cpu) 0x1111 0x10
-    cpu' <- execStateT (and RegisterA (Indirect (Reg16 RegH RegL))) cpu
-    toResultCPU cpu'
+    writeRAM (ram cpu) 0x1111 0x10
+    cpu' <- execStateT (and RegisterA IndirectHL) cpu
+    freezeCPU cpu'
 
 andRAN8 :: Test
-andRAN8 = "AND A, n8" ~: TestList [ "register updated" ~: reg8 RegA (resultRegisters resultCPU) ~?= 0x0
-                                  , "z flag" ~: flagZ (resultFlags resultCPU) ~?= True
-                                  , "h flag" ~: flagH (resultFlags resultCPU) ~?= True
+andRAN8 = "AND A, n8" ~: TestList [ "register updated" ~: reg8 RegA (frozenRegisters frozenCPU) ~?= 0x0
+                                  , "z flag" ~: flagZ (frozenFlags frozenCPU) ~?= True
+                                  , "h flag" ~: flagH (frozenFlags frozenCPU) ~?= True
                                   ] where
-  resultCPU = runST $ do
-    let regs = setReg8 RegA 0x1 emptyRegisters
+  frozenCPU = runST $ do
+    let regs = setReg8 RegA 0x1 initRegisters
     cpu <- withRegisters regs emptyCPU
     cpu' <- execStateT (and RegisterA (Uimm8 0x10)) cpu
-    toResultCPU cpu'
+    freezeCPU cpu'
 
 andTests :: Test
 andTests = "AND tests" ~: TestList [ andRAR8
@@ -374,8 +376,7 @@ nopTests = "NOP tests" ~: TestList []
 
 qc :: IO ()
 qc = do
-  putStrLn "LD r8, r8"
-  quickCheck prop_loadR8R8
+  quickCheck prop_load
 
 unitTests :: Test
 unitTests = "cpuTests" ~: TestList [ loadTests

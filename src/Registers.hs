@@ -4,7 +4,7 @@ module Registers
   , CombinedRegs
   , Reg (..)
   , Registers
-  , emptyRegisters
+  , initRegisters
   , setReg8
   , reg8
   , setReg16
@@ -12,10 +12,11 @@ module Registers
   )
 where
 
+import Control.Monad (join)
 import Data.Bits
-import Data.Kind
+import Data.List (intersperse)
 import Data.Word
-import Type.Reflection (typeRep, Typeable)
+import Test.QuickCheck (Arbitrary, arbitrary)
 
 data RegType
   = A
@@ -25,7 +26,7 @@ data RegType
   | E
   | H
   | L
-  deriving (Show, Typeable)
+  deriving Show
 
 data RegsCompatible = RegsCompatible
 
@@ -62,8 +63,16 @@ data Registers = Registers {
   regL :: Word8
 }
 
-emptyRegisters :: Registers
-emptyRegisters = Registers 0 0 0 0 0 0 0
+instance Show Registers where
+  show (Registers a b c d e h l) = "{" ++ join listed ++ "}"  where
+    listed = intersperse ", " $ map (\(x,y) -> x ++ "=" ++ show y) lst
+    lst = zip ["A","B","C","D","E","H","L"] [a, b, c, d, e, h, l]
+
+instance Arbitrary Registers where
+  arbitrary = Registers <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
+
+initRegisters :: Registers
+initRegisters = Registers 0 0 0 0 0 0 0
 
 setReg8 :: Reg r -> Word8 -> Registers -> Registers
 setReg8 RegA n8 rs = rs { regA = n8 }

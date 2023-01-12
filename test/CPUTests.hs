@@ -30,7 +30,7 @@ withSP w st = do
   cpu <- st
   return $ cpu { sp = w }
 
-prop_load :: Instruction 'KLoad -> FrozenCPU -> Bool
+prop_load :: Instruction -> FrozenCPU -> Bool
 prop_load ins@(Load op1 op2) frozenCPU = checkLoad op1 op2 where
   frozenCPU' = runST $ do
     cpu :: CPU (STArray s) (ST s) <- fromFrozenCPU frozenCPU
@@ -39,6 +39,7 @@ prop_load ins@(Load op1 op2) frozenCPU = checkLoad op1 op2 where
   checkLoad :: LoadOperands k1 k2 ~ 'KLoad => Operand k1 -> Operand k2 -> Bool
   checkLoad _ (StackPointer _) = True -- TODO: special checks
   checkLoad o1 o2 = evalOp frozenCPU o2 False == evalOp frozenCPU' o1 True
+prop_load _ _ = discard
 
 loadR8N8 :: Test
 loadR8N8 = "LD r8, n8" ~: reg8 RegB (frozenRegisters frozenCPU) ~?= 0xF where

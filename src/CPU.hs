@@ -181,7 +181,7 @@ evalOp cpu (IndirectUimm16 n16) undo = evalOp cpu (Indirect (Uimm16 n16)) undo
 step :: MArray a Word8 m => StateT (CPU a m) m (CPU a m)
 step = do
   cpu <- get
-  Ins instruction <- fetchInstruction
+  instruction <- fetchInstruction
   executeInstruction instruction
   cpu' <- get
   return $ cpu' { pc = pc cpu + 1 } -- TODO: update PC correctly
@@ -359,10 +359,10 @@ cp RegisterA op = do
   put $ cpu { flags = initFlags { flagZ = z, flagH = h, flagN = True, flagC = c} }
 
 -- TODO: implement
-fetchInstruction :: Monad m => StateT (CPU a m) m Ins
+fetchInstruction :: Monad m => StateT (CPU a m) m Instruction
 fetchInstruction = undefined
 
-executeInstruction :: MArray a Word8 m => Instruction k -> StateT (CPU a m) m ()
+executeInstruction :: MArray a Word8 m => Instruction -> StateT (CPU a m) m ()
 executeInstruction (Load o1 o2) = load o1 o2
 executeInstruction (Add at o1 o2) = add at o1 o2
 executeInstruction (And o1 o2) = and o1 o2

@@ -5,7 +5,6 @@ module Instruction
   , CompareOperands
   , InstructionKind (..)
   , Instruction (..)
-  , Ins (..)
   , ArithmeticType (..)
   , RotateType (..)
   , RotateDirection (..)
@@ -232,55 +231,53 @@ data PostRetOperation :: PostRetOperationKind -> Type where
 
 deriving instance Show (PostRetOperation prok)
 
-data Ins where
-  Ins :: Instruction k -> Ins
+data Instruction where
+  Load :: LoadOperands k1 k2 ~ 'KLoad => Operand k1 -> Operand k2 -> Instruction
+  Add :: AddOperands atk k1 k2 ~ 'KAdd => ArithmeticType atk -> Operand k1 -> Operand k2 -> Instruction
+  And :: AndOperands k1 k2 ~ 'KAnd => Operand k1 -> Operand k2 -> Instruction
+  Compare :: CompareOperands k1 k2 ~ 'KCompare => Operand k1 -> Operand k2 -> Instruction
+  Decrement :: DecrementOperand ok ~ 'KDecrement => Operand ok -> Instruction
+  Increment :: IncrementOperand ok ~ 'KIncrement => Operand ok -> Instruction
+  Or :: OrOperands k1 k2 ~ 'KOr => Operand k1 -> Operand k2 -> Instruction
+  Sub :: SubOperands k1 k2 ~ 'KSub => ArithmeticType atk -> Operand k1 -> Operand k2 -> Instruction
+  Xor :: XorOperands k1 k2 ~ 'KXor => Operand k1 -> Operand k2 -> Instruction
+  Bit :: (KnownNat n, BitOperand ok ~ 'KBit) => Uimm3 n -> Operand ok -> Instruction
+  Res :: (KnownNat n, ResOperand ok ~ 'KRes) => Uimm3 n -> Operand ok -> Instruction
+  Set :: (KnownNat n, SetOperand ok ~ 'KSet) => Uimm3 n -> Operand ok -> Instruction
+  Swap :: SwapOperand ok ~ 'KSwap => Operand ok -> Instruction
+  Rotate :: RotateOperand ok ~ 'KRotate => RotateDirection -> RotateType -> Operand ok -> Instruction
+  Shift :: (ShiftOperands k1 k2 ~ 'KShift, ShiftInstruction dk tk ~ 'ValidShift) => ShiftDirection dk -> ShiftType tk -> Operand k1 -> Operand k2 -> Instruction
+  Call :: ConditionCode ck -> Operand 'KUimm16 -> Instruction
+  Jump :: JumpOperand ck ok ~ 'KJump => ConditionCode ck -> Operand ok -> Instruction
+  Ret :: RetInstruction ck prok ~ 'ValidRetInstruction => ConditionCode ck -> PostRetOperation prok -> Instruction
+  Rst :: KnownNat n => RstVector n -> Instruction
+  Pop :: PopOperand ok ~ 'KPop => Operand ok -> Instruction
+  Push :: PushOperand ok ~ 'KPush => Operand ok -> Instruction
+  ComplementCarryFlag :: Instruction
+  ComplementAcc :: Instruction
+  DecimalAdjustAcc :: Instruction
+  ToggleInterrupts :: Bool -> Instruction
+  Halt :: Instruction
+  Nop :: Instruction
+  SetCarryFlag :: Instruction
+  Stop :: Instruction
 
-data Instruction ik where
-  Load :: LoadOperands k1 k2 ~ 'KLoad => Operand k1 -> Operand k2 -> Instruction 'KLoad
-  Add :: AddOperands atk k1 k2 ~ 'KAdd => ArithmeticType atk -> Operand k1 -> Operand k2 -> Instruction 'KAdd
-  And :: AndOperands k1 k2 ~ 'KAnd => Operand k1 -> Operand k2 -> Instruction 'KAnd
-  Compare :: CompareOperands k1 k2 ~ 'KCompare => Operand k1 -> Operand k2 -> Instruction 'KCompare
-  Decrement :: DecrementOperand ok ~ 'KDecrement => Operand ok -> Instruction 'KDecrement
-  Increment :: IncrementOperand ok ~ 'KIncrement => Operand ok -> Instruction 'KIncrement
-  Or :: OrOperands k1 k2 ~ 'KOr => Operand k1 -> Operand k2 -> Instruction 'KOr
-  Sub :: SubOperands k1 k2 ~ 'KSub => ArithmeticType atk -> Operand k1 -> Operand k2 -> Instruction 'KSub
-  Xor :: XorOperands k1 k2 ~ 'KXor => Operand k1 -> Operand k2 -> Instruction 'KXor
-  Bit :: (KnownNat n, BitOperand ok ~ 'KBit) => Uimm3 n -> Operand ok -> Instruction 'KBit
-  Res :: (KnownNat n, ResOperand ok ~ 'KRes) => Uimm3 n -> Operand ok -> Instruction 'KRes
-  Set :: (KnownNat n, SetOperand ok ~ 'KSet) => Uimm3 n -> Operand ok -> Instruction 'KSet
-  Swap :: SwapOperand ok ~ 'KSwap => Operand ok -> Instruction 'KSwap
-  Rotate :: RotateOperand ok ~ 'KRotate => RotateDirection -> RotateType -> Operand ok -> Instruction 'KRotate
-  Shift :: (ShiftOperands k1 k2 ~ 'KShift, ShiftInstruction dk tk ~ 'ValidShift) => ShiftDirection dk -> ShiftType tk -> Operand k1 -> Operand k2 -> Instruction 'KShift
-  Call :: ConditionCode ck -> Operand 'KUimm16 -> Instruction 'KCall
-  Jump :: JumpOperand ck ok ~ 'KJump => ConditionCode ck -> Operand ok -> Instruction 'KJump
-  Ret :: RetInstruction ck prok ~ 'ValidRetInstruction => ConditionCode ck -> PostRetOperation prok -> Instruction 'KRet
-  Rst :: KnownNat n => RstVector n -> Instruction 'KRst
-  Pop :: PopOperand ok ~ 'KPop => Operand ok -> Instruction 'KPop
-  Push :: PushOperand ok ~ 'KPush => Operand ok -> Instruction 'KPush
-  ComplementCarryFlag :: Instruction 'KComplementCarryFlag
-  ComplementAcc :: Instruction 'KComplementAcc
-  DecimalAdjustAcc :: Instruction 'KDecimalAdjustAcc
-  ToggleInterrupts :: Bool -> Instruction 'KToggleInterrupts
-  Halt :: Instruction 'KHalt
-  Nop :: Instruction 'KNop
-  SetCarryFlag :: Instruction 'KSetCarryFlag
-  Stop :: Instruction 'KStop
-
-instance Show (Instruction ik) where
+instance Show Instruction where
   show (Load o1 o2) = "LD " ++ show o1 ++ ", " ++ show o2
   show _ = undefined
 
-instance Arbitrary (Instruction 'KLoad) where
-  arbitrary = oneof [ liftM2 Load (arbitrary :: Gen (Operand 'KReg8)) (arbitrary :: Gen (Operand 'KReg8))
-                    , liftM2 Load (arbitrary :: Gen (Operand 'KReg8)) (arbitrary :: Gen (Operand 'KUimm8))
-                    , liftM2 Load (arbitrary :: Gen (Operand 'KReg16)) (arbitrary :: Gen (Operand 'KUimm16))
-                    , liftM2 Load (arbitrary :: Gen (Operand 'KIndirectHL)) (arbitrary :: Gen (Operand 'KReg8))
-                    , liftM2 Load (arbitrary :: Gen (Operand 'KIndirectHL)) (arbitrary :: Gen (Operand 'KUimm8))
-                    , liftM2 Load (arbitrary :: Gen (Operand 'KReg8)) (arbitrary :: Gen (Operand 'KIndirectHL))
-                    , liftM2 Load (arbitrary :: Gen (Operand 'KIndirect)) (arbitrary :: Gen (Operand 'KRegisterA))
-                    , liftM2 Load (arbitrary :: Gen (Operand 'KRegisterA)) (arbitrary :: Gen (Operand 'KIndirect))
-                    , liftM2 Load (arbitrary :: Gen (Operand ('KStackPointer 'KUnchanged))) (arbitrary :: Gen (Operand 'KUimm16))
-                    , liftM2 Load (arbitrary :: Gen (Operand 'KIndirectUimm16)) (arbitrary :: Gen (Operand ('KStackPointer 'KUnchanged)))
-                    , liftM2 Load (arbitrary :: Gen (Operand 'KRegisterHL)) (arbitrary :: Gen (Operand ('KStackPointer 'KAddInt8)))
-                    , liftM2 Load (arbitrary :: Gen (Operand ('KStackPointer 'KUnchanged))) (arbitrary :: Gen (Operand 'KRegisterHL))
-                    ]
+instance Arbitrary Instruction where
+  arbitrary = oneof [arbitraryLoad] where
+    arbitraryLoad = oneof [ liftM2 Load (arbitrary :: Gen (Operand 'KReg8)) (arbitrary :: Gen (Operand 'KReg8))
+                          , liftM2 Load (arbitrary :: Gen (Operand 'KReg8)) (arbitrary :: Gen (Operand 'KUimm8))
+                          , liftM2 Load (arbitrary :: Gen (Operand 'KReg16)) (arbitrary :: Gen (Operand 'KUimm16))
+                          , liftM2 Load (arbitrary :: Gen (Operand 'KIndirectHL)) (arbitrary :: Gen (Operand 'KReg8))
+                          , liftM2 Load (arbitrary :: Gen (Operand 'KIndirectHL)) (arbitrary :: Gen (Operand 'KUimm8))
+                          , liftM2 Load (arbitrary :: Gen (Operand 'KReg8)) (arbitrary :: Gen (Operand 'KIndirectHL))
+                          , liftM2 Load (arbitrary :: Gen (Operand 'KIndirect)) (arbitrary :: Gen (Operand 'KRegisterA))
+                          , liftM2 Load (arbitrary :: Gen (Operand 'KRegisterA)) (arbitrary :: Gen (Operand 'KIndirect))
+                          , liftM2 Load (arbitrary :: Gen (Operand ('KStackPointer 'KUnchanged))) (arbitrary :: Gen (Operand 'KUimm16))
+                          , liftM2 Load (arbitrary :: Gen (Operand 'KIndirectUimm16)) (arbitrary :: Gen (Operand ('KStackPointer 'KUnchanged)))
+                          , liftM2 Load (arbitrary :: Gen (Operand 'KRegisterHL)) (arbitrary :: Gen (Operand ('KStackPointer 'KAddInt8)))
+                          , liftM2 Load (arbitrary :: Gen (Operand ('KStackPointer 'KUnchanged))) (arbitrary :: Gen (Operand 'KRegisterHL))
+                          ]

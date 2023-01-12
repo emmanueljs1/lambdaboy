@@ -37,7 +37,7 @@ prop_load ins@(Load op1 op2) frozenCPU = checkLoad op1 op2 where
     cpu' <- execStateT (executeInstruction ins) cpu
     freezeCPU cpu'
   checkLoad :: LoadOperands k1 k2 ~ 'KLoad => Operand k1 -> Operand k2 -> Bool
-  checkLoad _ (StackPointer _) = True
+  checkLoad _ (StackPointer _) = True -- TODO: special checks
   checkLoad o1 o2 = evalOp frozenCPU o2 False == evalOp frozenCPU' o1 True
 
 loadR8N8 :: Test
